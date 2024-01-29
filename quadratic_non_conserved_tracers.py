@@ -27,18 +27,34 @@ def b_2_star(a):
 
 # comoving galaxy number density as a function of time
 def n_g(a):
-    return np.array([np.trapz(A(a[:p])*j(a[:p])/a[:p], a[:p]) for p in range(a.size)])
+    integrals = np.ndarray(100)
+    for i in range(a.size):
+        sf = np.linspace(0.01, a[i], 100)
+        integrals[i] = np.trapz(A(sf)*j(sf)/sf, sf)
+    return integrals
 
 # linear density bias as a function of time
 def b_1(a):
-    return 1 + 1/(n_g(a)*D(a)) * np.array([np.trapz(A(a[:p])*j(a[:p])/a[:p] * (b_1_star(a[:p]) - 1)*D(a[:p]), a[:p]) for p in range(a.size)])
+    integrals = np.ndarray(100)
+    for i in range(a.size):
+        sf = np.linspace(0.01, a[i], 100)
+        integrals[i] = np.trapz(A(sf)*j(sf)/sf * (b_1_star(sf) - 1)*D(sf), sf)
+    return 1 + 1/(n_g(a)*D(a)) * integrals
 
 # (normalised) multipole moments of second order bias as a function of time
 def chi_2(a):
-    return -1/(n_g(a)*D(a)**2) * np.array([np.trapz(A(a[:p])*j(a[:p])/a[:p] * D(a[:p])*(D(a[p]) - D(a[:p]))*(b_1_star(a[:p]) - 1), a[:p]) for p in range(a.size)])
+    integrals = np.ndarray(100)
+    for i in range(a.size):
+        sf = np.linspace(0.01, a[i], 100)
+        integrals[i] = np.trapz(A(sf)*j(sf)/sf * D(sf)*(D(a[i]) - D(sf))*(b_1_star(sf) - 1), sf)
+    return -1/(n_g(a)*D(a)**2) * integrals
 
 def chi_0(a):
-    return 21/(17*D(a)**2) * (-chi_2(a) + 1/n_g(a)*np.array([np.trapz(A(a[:p])*j(a[:p])/a[:p] * D(a[:p])**2 * 0.5*b_2_star(a[:p]), a[:p]) for p in range(a.size)]))
+    integrals = np.ndarray(100)
+    for i in range(a.size):
+        sf = np.linspace(0.01, a[i], 100)
+        integrals[i] = np.trapz(A(sf)*j(sf)/sf * 0.5*b_2_star(sf)*D(sf)**2, sf)
+    return 21/(17*D(a)**2) * (-chi_2(a) + 1/n_g(a) * integrals)
 
 # plot of quadratic bias evolution
 fig, axes = plt.subplots(2, 3, figsize=(15, 10), layout="constrained")
