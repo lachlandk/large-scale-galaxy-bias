@@ -55,20 +55,27 @@ def b_1(a):
         integrals[i] = np.trapz(A(sf)*j(sf)/sf * (b_1_star(sf) - 1)*D(sf), sf)
     return 1 + 1/(n_g(a)*D(a)) * integrals
 
+# matter kernels
+def K_0(a):
+    return 17/21 * D(a)**2
+
+def K_2(a):
+    return 4/21 * D(a)**2
+
 # (normalised) multipole moments of second order bias as a function of time
 def chi_2(a):
     integrals = np.ndarray(100)
     for i in range(a.size):
         sf = np.linspace(0.01, a[i], 100)
         integrals[i] = np.trapz(A(sf)*j(sf)/sf * D(sf)*(D(a[i]) - D(sf))*(b_1_star(sf) - 1), sf)
-    return -1/(n_g(a)*D(a)**2) * integrals
+    return -4/(21*n_g(a)) * integrals
 
 def chi_0(a):
     integrals = np.ndarray(100)
     for i in range(a.size):
         sf = np.linspace(0.01, a[i], 100)
         integrals[i] = np.trapz(A(sf)*j(sf)/sf * 0.5*b_2_star(sf)*D(sf)**2, sf)
-    return 21/(17*D(a)**2) * (-chi_2(a) + 1/n_g(a) * integrals)
+    return -chi_2(a) + integrals/n_g(a)
 
 # plot of quadratic bias evolution
 fig, axes = plt.subplots(2, 3, figsize=(15, 10), layout="constrained")
@@ -96,8 +103,8 @@ for i in range(3):
         number_density = n_g(scale_factor)
         axes[2].plot(scale_factor, number_density/number_density[-1], c=colours[k], linestyle=styles[i])
         axes[3].plot(scale_factor, b_1(scale_factor), c=colours[k], linestyle=styles[i])
-        axes[4].plot(scale_factor, chi_2(scale_factor), c=colours[k], linestyle=styles[i])
-        axes[5].plot(scale_factor, chi_0(scale_factor), c=colours[k], linestyle=styles[i])
+        axes[4].plot(scale_factor, chi_2(scale_factor)/K_2(scale_factor), c=colours[k], linestyle=styles[i])
+        axes[5].plot(scale_factor, chi_0(scale_factor)/K_0(scale_factor), c=colours[k], linestyle=styles[i])
 
 fig.suptitle("Evolution of Linear and Quadratic Bias with Non-Conserved Tracers")
 axes[0].set_ylabel("$b_1^*$")
