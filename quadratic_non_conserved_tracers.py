@@ -4,12 +4,26 @@ import matplotlib.pyplot as plt
 
 # scale factor
 scale_factor = np.linspace(0.1, 1, 100)
+# density parameters today
+Omega_m_0 = 0.25
+Omega_lambda_0 = 0.75
 
 # bias evolution
 # --------------------------------------------------
+# Hubble parameter squared
+def H2(a):
+    return Omega_m_0/a**3 + Omega_lambda_0
+
+# density parameters
+def Omega_m(a):
+    return Omega_m_0 / (a**3 * H2(a)) 
+
+def Omega_lambda(a):
+    return Omega_lambda_0 / H2(a)
+
 # linear growth factor
 def D(a):
-    return a
+    return 2.5*a*Omega_m(a)/(Omega_m(a)**(4/7) - Omega_lambda(a) + (1 + Omega_m(a)/2)*(1 + Omega_lambda(a)/70))
 
 # sources and sinks of galaxies as a function of time
 def A(a):
