@@ -1,0 +1,4 @@
+colossus
+matplotlib
+numpy
+scipy
