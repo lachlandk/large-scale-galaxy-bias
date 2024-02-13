@@ -2,3 +2,4 @@ colossus
 matplotlib
 numpy
 scipy
+h5py
