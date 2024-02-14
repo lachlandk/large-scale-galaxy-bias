@@ -14,7 +14,7 @@ from matplotlib.transforms import Affine2D
 plt.switch_backend("agg")
 
 
-def create_catalogue(dir, num_files):
+def create_data_catalogue(dir, num_files):
     with h5py.File("catalogue.hdf5", "w") as catalogue:
         cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f4")
         cat_vel = catalogue.create_dataset("RadialVel", (0,), maxshape=(None,), dtype="f4")
@@ -51,6 +51,23 @@ def create_catalogue(dir, num_files):
     return cat_num
 
 
+def create_random_catalogue(dir, size):
+    with h5py.File("random_catalogue.hdf5", "w") as catalogue:
+        ra = np.random.default_rng().uniform(0 , 90, size)
+        dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(0, 1, size))
+
+        with h5py.File("catalogue.hdf5", "r") as data:
+            data_z = np.array(data["z"])
+            data_mass = np.array(data["StellarMass"])
+
+            z = np.random.default_rng().choice(data_z, size)
+            mass = np.random.default_rng().choice(data_mass, size)
+
+        catalogue.create_dataset("Pos", (size, 2), data=np.transpose([ra, dec]), dtype="f4")
+        catalogue.create_dataset("z", (size,), data=z, dtype="f4")
+        catalogue.create_dataset("StellarMass", (size,), data=mass, dtype="f4")
+
+
 def calculate_cosmological_redshift(distance):
     distance = distance * u.Mpc / cu.littleh
     distance = distance.to(u.Mpc, cu.with_H0())
@@ -63,7 +80,7 @@ def calculate_peculiar_redshift(v_r):
 
 
 def plot_catalogue(ra, z, mass, save_name):
-    fig = plt.figure(figsize=(20, 20))
+    fig = plt.figure(figsize=(30, 30))
 
     tr_scale = Affine2D().scale(np.pi/180.0, 1.0)
     transform = tr_scale + PolarAxes.PolarTransform()
@@ -102,27 +119,27 @@ def plot_catalogue(ra, z, mass, save_name):
     plt.savefig(save_name)
 
 
-def plot_real_space_catalogue(filename):
+def plot_real_space_catalogue(filename, save_name):
     with h5py.File(filename, "r") as catalogue:
         pos = np.array(catalogue["Pos"])
         cosmo_z = np.array(catalogue["z"])
         mass = np.log10(np.array(catalogue["StellarMass"]))
-        plot_catalogue(pos[:,0], cosmo_z, mass, "real_space_catalogue.png")
+        plot_catalogue(pos[:,0], cosmo_z, mass, save_name)
 
 
-def plot_redshift_space_catalogue(filename):
+def plot_redshift_space_catalogue(filename, save_name):
     with h5py.File(filename, "r") as catalogue:
         pos = np.array(catalogue["Pos"])
-        cosmo_z = np.array(catalogue["zSpec"])
+        spec_z = np.array(catalogue["zSpec"])
         mass = np.log10(np.array(catalogue["StellarMass"]))
-        plot_catalogue(pos[:,0], cosmo_z, mass, "redshift_space_catalogue.png")        
+        plot_catalogue(pos[:,0], spec_z, mass, save_name)        
 
 
 if __name__ == "__main__":
     lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01/"
     files = 155
 
-    galaxy_numbers = create_catalogue(lightcone_dir, files)
+    galaxy_numbers = create_data_catalogue(lightcone_dir, files)
     print("Selected galaxies in each file: ", galaxy_numbers)
     print("Total galaxy number in catalogue: ", np.sum(galaxy_numbers))
 
@@ -136,5 +153,8 @@ if __name__ == "__main__":
         catalogue.create_dataset("z", data=cosmo_z, dtype="f4")
         catalogue.create_dataset("zSpec", data=spec_z, dtype="f4")
 
-    plot_real_space_catalogue("catalogue.hdf5")
-    plot_redshift_space_catalogue("catalogue.hdf5")
+    create_random_catalogue(lightcone_dir, 50000)
+
+    plot_real_space_catalogue("catalogue.hdf5", "real_space_catalogue.png")
+    plot_redshift_space_catalogue("catalogue.hdf5", "redshift_space_catalogue.png")
+    plot_real_space_catalogue("random_catalogue.hdf5", "real_space_random_catalogue.png")
