@@ -3,3 +3,5 @@ matplotlib
 numpy
 scipy
 h5py
+astropy
+tqdm

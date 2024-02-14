@@ -1,5 +1,10 @@
 import h5py
 import numpy as np
+from tqdm import trange
+import astropy.units as u
+import astropy.cosmology.units as cu
+from astropy.cosmology import Planck18 as cosmo, z_at_value
+
 
 def create_catalogue(dir, num_files):
     with h5py.File("catalogue.hdf5", "w") as catalogue:
@@ -8,7 +13,7 @@ def create_catalogue(dir, num_files):
         cat_mass = catalogue.create_dataset("StellarMass", (0,), maxshape=(None,), dtype="f4")
         cat_num = np.zeros(num_files, dtype="int")
 
-        for index in range(num_files):
+        for index in trange(num_files):
             with h5py.File(dir + f"gal_cone_01.{index}.hdf5", "r") as data:
                 galaxies = data["Galaxies"]
 
@@ -36,7 +41,14 @@ def create_catalogue(dir, num_files):
             cat_mass.resize(total_galaxies, axis=0)
             cat_mass[cat_num[index - 1]:] = stellar_mass
     return cat_num
-    
+
+
+def calculate_cosmological_redshift(distances):
+    distances = distances * u.Mpc / cu.littleh
+    distances = distances.to(u.Mpc, cu.with_H0())
+    redshifts = z_at_value(cosmo.comoving_distance, distances, zmin=0, zmax=1.5, ztol=0.001)
+    return redshifts
+
 
 if __name__ == "__main__":
     lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01/"
@@ -45,3 +57,10 @@ if __name__ == "__main__":
     galaxy_numbers = create_catalogue(lightcone_dir, files)
     print(galaxy_numbers)
     print(np.sum(galaxy_numbers))
+
+    with h5py.File("catalogue.hdf5", "r") as catalogue:
+        pos = catalogue["Pos"]
+        z = calculate_cosmological_redshift(pos[:,2])
+        print(np.max(pos[:,2]), np.min(pos[:,2]))
+        print(z)
+        print(np.max(z), np.min(z))
