@@ -1,9 +1,17 @@
 import h5py
 import numpy as np
 from tqdm import trange
+import matplotlib.pyplot as plt
 import astropy.units as u
 import astropy.cosmology.units as cu
 from astropy.cosmology import Planck18 as cosmo, z_at_value
+from mpl_toolkits.axisartist.floating_axes import FloatingSubplot, GridHelperCurveLinear
+import mpl_toolkits.axisartist.angle_helper as angle_helper
+from mpl_toolkits.axisartist.grid_finder import MaxNLocator
+from matplotlib.projections import PolarAxes
+from matplotlib.transforms import Affine2D
+
+plt.switch_backend("agg")
 
 
 def create_catalogue(dir, num_files):
@@ -50,6 +58,50 @@ def calculate_cosmological_redshift(distances):
     return redshifts
 
 
+def plot_real_space_catalogue(filename):
+    with h5py.File(filename, "r") as catalogue:
+        pos = np.array(catalogue["Pos"])
+        mass = np.log10(np.array(catalogue["StellarMass"]))
+
+        fig = plt.figure(figsize=(20, 20))
+
+        tr_scale = Affine2D().scale(np.pi/180.0, 1.0)
+        transform = tr_scale + PolarAxes.PolarTransform()
+        grid_locator1 = angle_helper.LocatorHMS(8)
+        tick_formatter1 = angle_helper.FormatterHMS()
+        grid_locator2 = MaxNLocator(3)
+        grid_helper = GridHelperCurveLinear(transform, extremes=(90, 0, np.max(pos[:,2]), 0), grid_locator1=grid_locator1, grid_locator2=grid_locator2, tick_formatter1=tick_formatter1, tick_formatter2=None)
+
+        ax = FloatingSubplot(fig, 111, grid_helper=grid_helper)
+        fig.add_subplot(ax)
+
+        # distance axis ticks and label
+        ax.axis["left"].toggle(ticklabels=False)
+        ax.axis["right"].toggle(ticklabels=True)
+        ax.axis["right"].set_axis_direction("bottom")
+        ax.axis["right"].label.set_visible(True)
+        ax.axis["right"].label.set_text("Distance [cMpc/h]")
+
+        # angle axis ticks and label
+        ax.axis["bottom"].major_ticklabels.set_axis_direction("top")
+        ax.axis["bottom"].label.set_axis_direction("top")
+        ax.axis["bottom"].label.set_text("RA")
+
+        ax.axis["top"].set_visible(False)
+
+        aux_ax = ax.get_aux_axes(transform)
+        aux_ax.patch = ax.patch
+        ax.patch.zorder = 0
+
+        scatter = aux_ax.scatter(pos[:,0], pos[:,2], c=mass, cmap="spring", s=0.1, marker=".")
+
+        ax.set_facecolor("black")
+
+        fig.colorbar(scatter, ax=ax, label="Stellar Mass [$\\log_{10}10^{10}M_\\odot/h$]")
+
+        plt.savefig("real_space_catalogue.png")
+
+
 if __name__ == "__main__":
     lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01/"
     files = 155
@@ -58,9 +110,4 @@ if __name__ == "__main__":
     print(galaxy_numbers)
     print(np.sum(galaxy_numbers))
 
-    with h5py.File("catalogue.hdf5", "r") as catalogue:
-        pos = catalogue["Pos"]
-        z = calculate_cosmological_redshift(pos[:,2])
-        print(np.max(pos[:,2]), np.min(pos[:,2]))
-        print(z)
-        print(np.max(z), np.min(z))
+    plot_real_space_catalogue("catalogue.hdf5")
