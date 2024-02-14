@@ -51,11 +51,15 @@ def create_catalogue(dir, num_files):
     return cat_num
 
 
-def calculate_cosmological_redshift(distances):
-    distances = distances * u.Mpc / cu.littleh
-    distances = distances.to(u.Mpc, cu.with_H0())
-    redshifts = z_at_value(cosmo.comoving_distance, distances, zmin=0, zmax=1.5, ztol=0.001)
-    return redshifts
+def calculate_cosmological_redshift(distance):
+    distance = distance * u.Mpc / cu.littleh
+    distance = distance.to(u.Mpc, cu.with_H0())
+    return z_at_value(cosmo.comoving_distance, distance, zmin=0, zmax=1.5, ztol=0.001)
+
+
+def calculate_peculiar_redshift(v_r):
+    c = 3e5  # km/s
+    return np.sqrt((1 + v_r/c) / (1 - v_r/c)) - 1
 
 
 def plot_real_space_catalogue(filename):
@@ -103,11 +107,23 @@ def plot_real_space_catalogue(filename):
 
 
 if __name__ == "__main__":
-    lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01/"
-    files = 155
+    # lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01/"
+    # files = 155
+    lightcone_dir = "./test/"
+    files = 2
 
     galaxy_numbers = create_catalogue(lightcone_dir, files)
     print(galaxy_numbers)
     print(np.sum(galaxy_numbers))
+
+    with h5py.File("catalogue.hdf5", "r+") as catalogue:
+        pos = np.array(catalogue["Pos"])
+        v_r = np.array(catalogue["RadialVel"])
+
+        cosmo_z = calculate_cosmological_redshift(pos[:,2])
+        spec_z = cosmo_z + calculate_peculiar_redshift(v_r)
+
+        catalogue.create_dataset("z", data=cosmo_z, dtype="f4")
+        catalogue.create_dataset("zSpec", data=spec_z, dtype="f4")
 
     plot_real_space_catalogue("catalogue.hdf5")
