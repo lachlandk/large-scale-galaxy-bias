@@ -10,6 +10,7 @@ import mpl_toolkits.axisartist.angle_helper as angle_helper
 from mpl_toolkits.axisartist.grid_finder import MaxNLocator
 from matplotlib.projections import PolarAxes
 from matplotlib.transforms import Affine2D
+from mpl_toolkits.basemap import Basemap
 
 plt.switch_backend("agg")
 
@@ -119,6 +120,27 @@ def plot_catalogue(ra, z, mass, save_name):
     plt.savefig(save_name)
 
 
+def plot_catalogue_map(filename, save_name):
+    with h5py.File(filename, "r") as catalogue:
+        pos = np.array(catalogue["Pos"])
+        mass = np.log10(np.array(catalogue["StellarMass"]))
+
+        fig, ax = plt.subplots(1, 1, figsize=(30, 30))
+        fig.suptitle("Catalogue Map", fontsize=40)
+
+        map = Basemap(projection="ortho", lat_0=45, lon_0=45, ax=ax)
+
+        map.drawmeridians(np.arange(0, 360, 30), color="white", textcolor="white", dashes=(None, None), latmax=90)
+        map.drawparallels(np.arange(-90, 90, 30), color="white", textcolor="white", dashes=(None, None))
+        map.drawmapboundary(fill_color="black")
+
+        scatter = map.scatter(pos[:,0], pos[:,1], latlon=True, c=mass, cmap="spring", s=0.1, marker=".")
+
+        map.colorbar(scatter, ax=ax, label="Stellar Mass [$\\log_{10}10^{10}M_\\odot/h$]")
+
+        plt.savefig(save_name)
+
+
 def plot_real_space_catalogue(filename, save_name):
     with h5py.File(filename, "r") as catalogue:
         pos = np.array(catalogue["Pos"])
@@ -155,6 +177,8 @@ if __name__ == "__main__":
 
     create_random_catalogue(lightcone_dir, 50000)
 
+    plot_catalogue_map("catalogue.hdf5", "catalogue_map.png")
+    plot_catalogue_map("random_catalogue.hdf5", "random_catalogue_map.png")
     plot_real_space_catalogue("catalogue.hdf5", "real_space_catalogue.png")
     plot_redshift_space_catalogue("catalogue.hdf5", "redshift_space_catalogue.png")
     plot_real_space_catalogue("random_catalogue.hdf5", "real_space_random_catalogue.png")
