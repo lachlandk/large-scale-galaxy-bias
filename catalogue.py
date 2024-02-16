@@ -17,8 +17,8 @@ plt.switch_backend("agg")
 
 def create_data_catalogue(dir, num_files):
     with h5py.File("catalogue.hdf5", "w") as catalogue:
-        cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f4")
-        cat_vel = catalogue.create_dataset("RadialVel", (0,), maxshape=(None,), dtype="f4")
+        cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
+        cat_vel = catalogue.create_dataset("RadialVel", (0,), maxshape=(None,), dtype="f8")
         cat_mass = catalogue.create_dataset("StellarMass", (0,), maxshape=(None,), dtype="f4")
         cat_num = np.zeros(num_files, dtype="int")
 
@@ -63,9 +63,10 @@ def create_random_catalogue(dir, size):
 
             z = np.random.default_rng().choice(data_z, size)
             mass = np.random.default_rng().choice(data_mass, size)
+            dist = np.array(cosmo.comoving_distance(z))
 
-        catalogue.create_dataset("Pos", (size, 2), data=np.transpose([ra, dec]), dtype="f4")
-        catalogue.create_dataset("zCosmo", (size,), data=z, dtype="f4")
+        catalogue.create_dataset("Pos", (size, 3), data=np.transpose([ra, dec, dist]), dtype="f8")
+        catalogue.create_dataset("zCosmo", (size,), data=z, dtype="f8")
         catalogue.create_dataset("StellarMass", (size,), data=mass, dtype="f4")
 
 
@@ -158,10 +159,8 @@ def plot_redshift_space_catalogue(filename, save_name):
 
 
 if __name__ == "__main__":
-    # lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01/"
-    # files = 155
-    lightcone_dir = "./test/"
-    files = 2
+    lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01/"
+    files = 155
 
     galaxy_numbers = create_data_catalogue(lightcone_dir, files)
     print("Selected galaxies in each file: ", galaxy_numbers)
@@ -174,10 +173,10 @@ if __name__ == "__main__":
         cosmo_z = calculate_cosmological_redshift(pos[:,2])
         spec_z = calculate_observed_redshift(cosmo_z, v_r)
 
-        catalogue.create_dataset("zCosmo", data=cosmo_z, dtype="f4")
-        catalogue.create_dataset("zSpec", data=spec_z, dtype="f4")
+        catalogue.create_dataset("zCosmo", data=cosmo_z, dtype="f8")
+        catalogue.create_dataset("zSpec", data=spec_z, dtype="f8")
 
-    create_random_catalogue(lightcone_dir, 50000)
+    create_random_catalogue(lightcone_dir, 100000)
 
     plot_catalogue_map("catalogue.hdf5", "maps/catalogue_map.png")
     plot_catalogue_map("random_catalogue.hdf5", "maps/random_catalogue_map.png")
