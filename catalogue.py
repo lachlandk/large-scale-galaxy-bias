@@ -44,12 +44,13 @@ def create_data_catalogue(dir, num_files):
                 v_r = (vel[:,0]*pos[:,0] + vel[:,1]*pos[:,1] + vel[:,2]*pos[:,2]) / r  # km/s
 
             total_galaxies = np.sum(cat_num)
+            start_index = np.sum(cat_num[:index])
             cat_pos.resize(total_galaxies, axis=0)
-            cat_pos[cat_num[index - 1]:] = np.transpose([ra, dec, r])
+            cat_pos[start_index:] = np.transpose([ra, dec, r])
             cat_vel.resize(total_galaxies, axis=0)
-            cat_vel[cat_num[index - 1]:] = v_r
+            cat_vel[start_index:] = v_r
             cat_mass.resize(total_galaxies, axis=0)
-            cat_mass[cat_num[index - 1]:] = stellar_mass
+            cat_mass[start_index:] = stellar_mass
     return cat_num
 
 
