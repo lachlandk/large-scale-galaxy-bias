@@ -1,6 +1,7 @@
 import h5py
 import numpy as np
 from tqdm import trange
+from datetime import datetime
 import matplotlib.pyplot as plt
 import astropy.units as u
 import astropy.cosmology.units as cu
@@ -159,10 +160,13 @@ def plot_redshift_space_catalogue(filename, save_name):
 
 
 if __name__ == "__main__":
+    start_time = datetime.now()
     lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01/"
     files = 155
 
+    print("Creating galaxy catalogue...")
     galaxy_numbers = create_data_catalogue(lightcone_dir, files)
+    print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
     print("Selected galaxies in each file: ", galaxy_numbers)
     print("Total galaxy number in catalogue: ", np.sum(galaxy_numbers))
 
@@ -170,16 +174,25 @@ if __name__ == "__main__":
         pos = np.array(catalogue["Pos"])
         v_r = np.array(catalogue["RadialVel"])
 
+        print("Calculating cosmological redshifts...")
         cosmo_z = calculate_cosmological_redshift(pos[:,2])
+        print(f"Cosmological redshifts calculated, elapsed time: {datetime.now() - start_time}")
+        print("Calculating spectroscopic redshifts")
         spec_z = calculate_observed_redshift(cosmo_z, v_r)
+        print(f"Spectroscopic redshifts calculated, elapsed time: {datetime.now() - start_time}")
 
         catalogue.create_dataset("zCosmo", data=cosmo_z, dtype="f8")
         catalogue.create_dataset("zSpec", data=spec_z, dtype="f8")
 
-    create_random_catalogue(lightcone_dir, 100000)
+    random_catalogue_size = 100000
+    print(f"Creating random catalogue of size {random_catalogue_size}...")
+    create_random_catalogue(lightcone_dir, random_catalogue_size)
+    print(f"Random catalogue created, elapsed time: {datetime.now() - start_time}")
 
+    print("Plotting catalogue maps...")
     plot_catalogue_map("catalogue.hdf5", "maps/catalogue_map.png")
     plot_catalogue_map("random_catalogue.hdf5", "maps/random_catalogue_map.png")
     plot_real_space_catalogue("catalogue.hdf5", "maps/real_space_catalogue.png")
     plot_redshift_space_catalogue("catalogue.hdf5", "maps/redshift_space_catalogue.png")
     plot_real_space_catalogue("random_catalogue.hdf5", "maps/real_space_random_catalogue.png")
+    print(f"Catalogue maps plotted, elapsed time: {datetime.now() - start_time}")
