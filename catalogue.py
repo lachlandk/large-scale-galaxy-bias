@@ -21,13 +21,14 @@ def create_data_catalogue(dir, num_files):
         cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
         cat_vel = catalogue.create_dataset("RadialVel", (0,), maxshape=(None,), dtype="f8")
         cat_mass = catalogue.create_dataset("StellarMass", (0,), maxshape=(None,), dtype="f4")
+        cat_mag = catalogue.create_dataset("ObsMagDust", (0, 5), maxshape=(None,), dtype="f4")
         cat_num = np.zeros(num_files, dtype="int")
 
         for index in trange(num_files):
             with h5py.File(dir + f"gal_cone_01.{index}.hdf5", "r") as data:
                 galaxies = data["Galaxies"]
 
-                mag_limit = 19.5  # r band, get reference for this
+                mag_limit = 19.5  # r band, same as DESI Bright Galaxy Sample
                 mag = np.array(galaxies["ObsMagDust"])  # u g r i z, magnitude with k-correction and corrected for dust extinction
                 mag_filter = mag[:,2] < mag_limit
                 cat_num[index] = np.count_nonzero(mag_filter)
@@ -35,6 +36,7 @@ def create_data_catalogue(dir, num_files):
                 pos = np.array(galaxies["Pos"])[mag_filter]  # cMpc/h
                 vel = np.array(galaxies["Vel"])[mag_filter]  # km/s
                 stellar_mass = np.array(galaxies["StellarMass"])[mag_filter]  # 10^10 M_sol/h
+                mag = np.array(galaxies["ObsMagDustR"])[mag_filter]  # mag
             
                 R = np.sqrt(pos[:,0]**2 + pos[:,1]**2)  # cMpc/h
                 r = np.sqrt(R**2 + pos[:,2]**2)  # cMpc/h
@@ -51,10 +53,12 @@ def create_data_catalogue(dir, num_files):
             cat_vel[start_index:] = v_r
             cat_mass.resize(total_galaxies, axis=0)
             cat_mass[start_index:] = stellar_mass
+            cat_mag.resize(total_galaxies, axis=0)
+            cat_mag[start_index:] = mag
     return cat_num
 
 
-def create_random_catalogue(dir, size):
+def create_random_catalogue(size):
     with h5py.File("random_catalogue.hdf5", "w") as catalogue:
         ra = np.random.default_rng().uniform(0 , 90, size)
         dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(0, 1, size))
@@ -62,14 +66,17 @@ def create_random_catalogue(dir, size):
         with h5py.File("catalogue.hdf5", "r") as data:
             data_z = np.array(data["zCosmo"])
             data_mass = np.array(data["StellarMass"])
+            data_mag = np.array(data["ObsMagDust"])
 
             z = np.random.default_rng().choice(data_z, size)
             mass = np.random.default_rng().choice(data_mass, size)
+            mag = np.random.default_rng().choice(data_mag)
             dist = np.array(cosmo.comoving_distance(z))
 
         catalogue.create_dataset("Pos", (size, 3), data=np.transpose([ra, dec, dist]), dtype="f8")
         catalogue.create_dataset("zCosmo", (size,), data=z, dtype="f8")
         catalogue.create_dataset("StellarMass", (size,), data=mass, dtype="f4")
+        catalogue.create_dataset("ObsMagDust", (size, 5), data=mag, dtype="f4")
 
 
 def calculate_cosmological_redshift(distance):
@@ -187,7 +194,7 @@ if __name__ == "__main__":
 
     random_catalogue_size = 100000
     print(f"Creating random catalogue of size {random_catalogue_size}...")
-    create_random_catalogue(lightcone_dir, random_catalogue_size)
+    create_random_catalogue(random_catalogue_size)
     print(f"Random catalogue created, elapsed time: {datetime.now() - start_time}")
 
     print("Plotting catalogue maps...")
