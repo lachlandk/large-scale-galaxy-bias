@@ -1,9 +1,8 @@
+basemap
 colossus
+corrfunc
+h5py
 matplotlib
 numpy
 scipy
-h5py
-astropy
 tqdm
-basemap
-corrfunc
