@@ -4,14 +4,18 @@ from tqdm import trange
 from datetime import datetime
 from scipy import optimize, interpolate
 import matplotlib.pyplot as plt
-from mpl_toolkits.axisartist.floating_axes import FloatingSubplot, GridHelperCurveLinear
 import mpl_toolkits.axisartist.angle_helper as angle_helper
+from mpl_toolkits.axisartist.floating_axes import FloatingAxes, GridHelperCurveLinear
 from mpl_toolkits.axisartist.grid_finder import MaxNLocator
 from matplotlib.projections import PolarAxes
 from matplotlib.transforms import Affine2D
 from mpl_toolkits.basemap import Basemap
 
 plt.switch_backend("agg")
+plt.rcParams["axes.titlesize"] = 40
+plt.rcParams["axes.labelsize"] = 40
+plt.rcParams["xtick.labelsize"] = 30
+plt.rcParams["ytick.labelsize"] = 30
 
 # cosmological parameters
 c = 3e5  # km/s
@@ -25,7 +29,7 @@ def comoving_distance(z):
 
 
 def create_data_catalogue(dir, num_files):
-    with h5py.File("catalogue.hdf5", "w") as catalogue:
+    with h5py.File("data_catalogue.hdf5", "w") as catalogue:
         cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
         cat_vel = catalogue.create_dataset("RadialVel", (0,), maxshape=(None,), dtype="f8")
         cat_mass = catalogue.create_dataset("StellarMass", (0,), maxshape=(None,), dtype="f4")
@@ -71,7 +75,7 @@ def create_random_catalogue(size):
         ra = np.random.default_rng().uniform(0 , 90, size)
         dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(0, 1, size))
 
-        with h5py.File("catalogue.hdf5", "r") as data:
+        with h5py.File("data_catalogue.hdf5", "r") as data:
             data_mass = np.array(data["StellarMass"])
             data_mag = np.array(data["ObsMagDust"])
             data_z = np.array(data["z"])
@@ -93,76 +97,64 @@ def create_random_catalogue(size):
 def plot_catalogue(filename, save_name):
     with h5py.File(filename, "r") as catalogue:
         pos = np.array(catalogue["Pos"])
-        ra = pos[:,0]
-        dist = pos[:,2]
-        mass = np.log10(np.array(catalogue["StellarMass"]))
+        mag = np.array(catalogue["ObsMagDust"])
+        colour = mag[:,1] - mag[:,2]
 
-    fig = plt.figure(figsize=(30, 30))
+    fig = plt.figure(figsize=(50, 25))
+    fig.suptitle("Catalogue Map", fontsize=40)
 
+    # sky projection
+    ax1 = fig.add_subplot(121)
+    ax1.set_title("Light cone projected onto the sky")
+
+    map = Basemap(projection="ortho", lat_0=45, lon_0=45, ax=ax1)
+    map.drawmeridians(np.arange(0, 360, 30), color="white", dashes=(None, None), latmax=90)
+    map.drawparallels(np.arange(-90, 90, 30), color="white", dashes=(None, None))
+    map.drawmapboundary(fill_color="black")
+
+    scatter = map.scatter(pos[:,0], pos[:,1], latlon=True, c=colour, cmap="spring", s=0.1, marker=".")
+
+    # plane projection
     tr_scale = Affine2D().scale(np.pi/180.0, 1.0)
     transform = tr_scale + PolarAxes.PolarTransform()
     grid_locator1 = angle_helper.LocatorHMS(8)
     tick_formatter1 = angle_helper.FormatterHMS()
     grid_locator2 = MaxNLocator(3)
-    grid_helper = GridHelperCurveLinear(transform, extremes=(90, 0, np.max(dist), 0), grid_locator1=grid_locator1, grid_locator2=grid_locator2, tick_formatter1=tick_formatter1, tick_formatter2=None)
-
-    ax = FloatingSubplot(fig, 111, grid_helper=grid_helper)
-    fig.add_subplot(ax)
+    grid_helper = GridHelperCurveLinear(transform, extremes=(90, 0, np.max(pos[:,2]), 0), grid_locator1=grid_locator1, grid_locator2=grid_locator2, tick_formatter1=tick_formatter1, tick_formatter2=None)
+    ax2 = fig.add_subplot(122, axes_class=FloatingAxes, grid_helper=grid_helper)
+    ax2.set_title("Light cone projected into 2D")
+    ax2.set_facecolor("black")
 
     # distance axis ticks and label
-    ax.axis["left"].toggle(ticklabels=False)
-    ax.axis["right"].toggle(ticklabels=True)
-    ax.axis["right"].set_axis_direction("bottom")
-    ax.axis["right"].label.set_visible(True)
-    ax.axis["right"].label.set_text("Distance [cMpc/h]")
+    ax2.axis["left"].toggle(ticklabels=False)
+    ax2.axis["right"].toggle(ticklabels=True)
+    ax2.axis["right"].set_axis_direction("bottom")
+    ax2.axis["right"].label.set_visible(True)
+    ax2.axis["right"].label.set_text("Distance [cMpc/h]")
 
     # angle axis ticks and label
-    ax.axis["bottom"].major_ticklabels.set_axis_direction("top")
-    ax.axis["bottom"].label.set_axis_direction("top")
-    ax.axis["bottom"].label.set_text("RA")
+    ax2.axis["bottom"].major_ticklabels.set_axis_direction("top")
+    ax2.axis["bottom"].label.set_axis_direction("top")
+    ax2.axis["bottom"].label.set_text("RA")
 
-    ax.axis["top"].set_visible(False)
+    ax2.axis["top"].set_visible(False)
 
-    aux_ax = ax.get_aux_axes(transform)
-    aux_ax.patch = ax.patch
-    ax.patch.zorder = 0
+    aux_ax = ax2.get_aux_axes(transform)
+    aux_ax.patch = ax2.patch
+    ax2.patch.zorder = 0
 
-    scatter = aux_ax.scatter(ra, dist, c=mass, cmap="spring", s=0.1, marker=".")
+    scatter = aux_ax.scatter(pos[:,0], pos[:,2], c=colour, cmap="spring", s=0.01, marker=".")
 
-    ax.set_facecolor("black")
-
-    fig.colorbar(scatter, ax=ax, label="Stellar Mass [$\\log_{10}10^{10}M_\\odot/h$]")
+    # colorbar
+    fig.colorbar(scatter, ax=ax2, label="g-r Colour (Observer Frame)")
 
     plt.savefig(save_name)
 
 
-def plot_catalogue_map(filename, save_name):
-    with h5py.File(filename, "r") as catalogue:
-        pos = np.array(catalogue["Pos"])
-        mass = np.log10(np.array(catalogue["StellarMass"]))
-
-        fig, ax = plt.subplots(1, 1, figsize=(30, 30))
-        fig.suptitle("Catalogue Map", fontsize=40)
-
-        map = Basemap(projection="ortho", lat_0=45, lon_0=45, ax=ax)
-
-        map.drawmeridians(np.arange(0, 360, 30), color="white", textcolor="white", dashes=(None, None), latmax=90)
-        map.drawparallels(np.arange(-90, 90, 30), color="white", textcolor="white", dashes=(None, None))
-        map.drawmapboundary(fill_color="black")
-
-        scatter = map.scatter(pos[:,0], pos[:,1], latlon=True, c=mass, cmap="spring", s=0.1, marker=".")
-
-        map.colorbar(scatter, ax=ax, label="Stellar Mass [$\\log_{10}10^{10}M_\\odot/h$]")
-
-        plt.savefig(save_name)      
-
-
 if __name__ == "__main__":
     start_time = datetime.now()
-    # lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01/"
-    # files = 155
-    lightcone_dir = "./test/"
-    files = 2
+    lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01/"
+    files = 155
 
     print("Creating galaxy catalogue...")
     galaxy_numbers = create_data_catalogue(lightcone_dir, files)
@@ -170,7 +162,7 @@ if __name__ == "__main__":
     print("Selected galaxies in each file: ", galaxy_numbers)
     print("Total galaxy number in catalogue: ", np.sum(galaxy_numbers))
 
-    with h5py.File("catalogue.hdf5", "r+") as catalogue:
+    with h5py.File("data_catalogue.hdf5", "r+") as catalogue:
         pos = np.array(catalogue["Pos"])
         v_r = np.array(catalogue["RadialVel"])
 
@@ -208,8 +200,6 @@ if __name__ == "__main__":
     print(f"Random catalogue created, elapsed time: {datetime.now() - start_time}")
 
     print("Plotting catalogue maps...")
-    plot_catalogue_map("catalogue.hdf5", "maps/catalogue_map.png")
-    plot_catalogue_map("random_catalogue.hdf5", "maps/random_catalogue_map.png")
-    plot_catalogue("catalogue.hdf5", "maps/catalogue.png")
-    plot_catalogue("random_catalogue.hdf5", "maps/random_catalogue.png")
+    plot_catalogue("data_catalogue.hdf5", "maps/data_catalogue_map.png")
+    plot_catalogue("random_catalogue.hdf5", "maps/random_catalogue_map.png")
     print(f"Catalogue maps plotted, elapsed time: {datetime.now() - start_time}")

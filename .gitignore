@@ -1,2 +1,6 @@
 # Python dev files
 /.venv
+
+# Data Files
+data_catalogue.hdf5
+random_catalogue.hdf5
