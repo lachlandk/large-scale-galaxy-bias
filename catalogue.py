@@ -44,7 +44,7 @@ def z_at_comoving_distance(r):
     return z
 
 
-def create_data_catalogue(dir, num_files, mag_lim=19.5, mass_lim=0):
+def create_data_catalogue(dir, num_files, mag_lim=19.5, mass_lim=0, z_lims=[0, 1.5]):
     with h5py.File("data_catalogue.hdf5", "w") as catalogue:
         cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
         cat_z = catalogue.create_dataset("z", (0,), maxshape=(None,), dtype="f8")
@@ -63,13 +63,10 @@ def create_data_catalogue(dir, num_files, mag_lim=19.5, mass_lim=0):
                 
                 pos = np.array(galaxies["Pos"])[data_filter]  # [cMpc/h]
                 vel = np.array(galaxies["Vel"])[data_filter]  # [km/s]
-                filtered_mag = mag[data_filter]  # [mag]
             
             # calculate positions in spherical coordinates
             R = np.sqrt(pos[:,0]**2 + pos[:,1]**2)  # [cMpc/h]
             r = np.sqrt(R**2 + pos[:,2]**2)  # [cMpc/h]
-            dec = 90 - 180/np.pi * np.arctan2(R, pos[:,2])  # [degrees]
-            ra = 180/np.pi * np.arctan2(pos[:,1], pos[:,0])  # [degrees]
 
             # calculate radial peculiar velocity
             v_r = (vel[:,0]*pos[:,0] + vel[:,1]*pos[:,1] + vel[:,2]*pos[:,2]) / r  # [km/s]
@@ -77,10 +74,23 @@ def create_data_catalogue(dir, num_files, mag_lim=19.5, mass_lim=0):
             # calculate redshift space position by correcting for peculiar velocity
             cosmo_z = z_at_comoving_distance(r)
             obs_z = (1 + cosmo_z)*(1 + v_r/c) - 1  # correct to linear order
+            
+            # apply redshift filter
+            low_z_filter = obs_z > z_lims[0]
+            print(low_z_filter)
+            high_z_filter = obs_z < z_lims[1]
+            print(high_z_filter)
+            print(comoving_distance(z_lims[0]), comoving_distance(z_lims[1]))
+            z_filter = np.logical_and(low_z_filter, high_z_filter)
+
+            obs_z = obs_z[z_filter]
             obs_r = comoving_distance(obs_z)  # [cMpc/h]
+            ra = 180/np.pi * np.arctan2(pos[z_filter][:,1], pos[z_filter][:,0])  # [degrees]
+            dec = 90 - 180/np.pi * np.arctan2(R[z_filter], pos[z_filter][:,2])  # [degrees]
+            mag = mag[data_filter][z_filter]  # [mag]
 
             # add data to catalogue
-            cat_num[index] = np.count_nonzero(data_filter)
+            cat_num[index] = np.count_nonzero(z_filter)
             total_galaxies = np.sum(cat_num)
             start_index = np.sum(cat_num[:index])
             cat_pos.resize(total_galaxies, axis=0)
@@ -88,7 +98,7 @@ def create_data_catalogue(dir, num_files, mag_lim=19.5, mass_lim=0):
             cat_z.resize(total_galaxies, axis=0)
             cat_z[start_index:] = obs_z
             cat_mag.resize(total_galaxies, axis=0)
-            cat_mag[start_index:] = filtered_mag
+            cat_mag[start_index:] = mag
     return cat_num
 
 
