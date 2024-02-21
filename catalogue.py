@@ -23,9 +23,28 @@ Omega_m_0 = 0.30966
 Omega_Lambda_0 = 0.6888463055445441
 
 # cosmological functions
+# create interpolating function for comoving distance
+num_interp_points = 100
+interp_points_r = np.ndarray(num_interp_points)
+interp_points_z = np.linspace(0, 1.5, num_interp_points)
+for i in range(num_interp_points):
+    integration_range = np.linspace(0, interp_points_z[i], 100)
+    interp_points_r[i] = np.trapz(c / (100*np.sqrt(Omega_m_0 * (1 + integration_range)**3 + Omega_Lambda_0)), integration_range)  # [cMpc/h]
+interp = interpolate.CubicSpline(interp_points_z, interp_points_r, extrapolate=False)
+
+
 def comoving_distance(z):
-    integration_range = np.linspace(0, z, 100)
-    return np.trapz(c / (100*np.sqrt(Omega_m_0 * (1 + integration_range)**3 + Omega_Lambda_0)), integration_range)
+    return interp(z)  # [cMpc/h]
+    
+
+def z_at_comoving_distance(r):
+    if isinstance(r, np.ndarray):
+        z = np.ndarray(r.shape[0])
+        for i in range(r.shape[0]):
+            z[i] = optimize.root_scalar(lambda z: r[i] - interp(z), bracket=[0, 1.5]).root
+    else:
+        z = optimize.root_scalar(lambda z: r - interp(z), bracket=[0, 1.5]).root
+    return z
 
 
 def create_data_catalogue(dir, num_files):
@@ -84,9 +103,7 @@ def create_random_catalogue(size):
             mass = np.random.default_rng().choice(data_mass, size)
             mag = np.random.default_rng().choice(data_mag, size)
 
-            dist = np.ndarray(size)
-            for i in range(size):
-                dist[i] = comoving_distance(z[i])
+            dist = comoving_distance(z)
 
         catalogue.create_dataset("Pos", (size, 3), data=np.transpose([ra, dec, dist]), dtype="f8")
         catalogue.create_dataset("z", (size,), data=z, dtype="f8")
@@ -167,18 +184,7 @@ if __name__ == "__main__":
         v_r = np.array(catalogue["RadialVel"])
 
         print("Calculating cosmological redshifts...")
-        cosmo_z = np.ndarray(pos.shape[0])
-
-        num_interp_points = 100
-        interp_points_r = np.ndarray(num_interp_points)
-        interp_points_z = np.linspace(0, 1.5, num_interp_points)
-        for i in range(num_interp_points):
-            interp_points_r[i] = comoving_distance(interp_points_z[i])  # [cMpc/h]
-
-        interp = interpolate.CubicSpline(interp_points_z, interp_points_r, extrapolate=False)
-
-        for i in trange(pos.shape[0]):
-            cosmo_z[i] = optimize.root_scalar(lambda z: pos[i,2] - interp(z), bracket=[0, 1.5]).root
+        cosmo_z = z_at_comoving_distance(pos[:,2])
         print(f"Cosmological redshifts calculated, elapsed time: {datetime.now() - start_time}")
 
         print("Calculating spectroscopic redshifts...")
@@ -186,9 +192,7 @@ if __name__ == "__main__":
         print(f"Spectroscopic redshifts calculated, elapsed time: {datetime.now() - start_time}")
 
         print("Calculating redshift-space positions...")
-        rsd_dist = np.ndarray(pos.shape[0])
-        for i in trange(pos.shape[0]):
-            rsd_dist[i] = comoving_distance(spec_z[i])  # [cMpc/h]
+        rsd_dist = comoving_distance(spec_z)  # [cMpc/h]
         print(f"Redshift-space positions calculated, elapsed time: {datetime.now() - start_time}")
 
         catalogue["Pos"][:,2] = rsd_dist
