@@ -44,11 +44,10 @@ def z_at_comoving_distance(r):
     return z
 
 
-def create_data_catalogue(dir, num_files):
+def create_data_catalogue(dir, num_files, mag_lim=19.5, mass_lim=0):
     with h5py.File("data_catalogue.hdf5", "w") as catalogue:
         cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
         cat_z = catalogue.create_dataset("z", (0,), maxshape=(None,), dtype="f8")
-        cat_mass = catalogue.create_dataset("StellarMass", (0,), maxshape=(None,), dtype="f4")
         cat_mag = catalogue.create_dataset("ObsMagDust", (0, 5), maxshape=(None, 5), dtype="f4")
         cat_num = np.zeros(num_files, dtype="int")
 
@@ -56,13 +55,14 @@ def create_data_catalogue(dir, num_files):
             with h5py.File(dir + f"gal_cone_01.{index}.hdf5", "r") as data:
                 galaxies = data["Galaxies"]
 
-                mag_limit = 19.5  # r band, same as DESI Bright Galaxy Sample
                 mag = np.array(galaxies["ObsMagDust"])  # u g r i z, magnitude with k-correction and corrected for dust extinction
-                data_filter = mag[:,2] < mag_limit
+                mag_filter = mag[:,2] < mag_lim  # magnitude limit in r band, 19.5 is the limit for DESI Bright Galaxy Sample
+                mass = np.log10(1e10 * np.array(galaxies["StellarMass"])) # [log_10(M_sol/h)]
+                mass_filter = mass > mass_lim  # lower mass limit
+                data_filter = np.logical_and(mag_filter, mass_filter)
                 
                 pos = np.array(galaxies["Pos"])[data_filter]  # [cMpc/h]
                 vel = np.array(galaxies["Vel"])[data_filter]  # [km/s]
-                stellar_mass = np.array(galaxies["StellarMass"])[data_filter]  # [10^10 M_sol/h]
                 filtered_mag = mag[data_filter]  # [mag]
             
             # calculate positions in spherical coordinates
@@ -87,8 +87,6 @@ def create_data_catalogue(dir, num_files):
             cat_pos[start_index:] = np.transpose([ra, dec, obs_r])
             cat_z.resize(total_galaxies, axis=0)
             cat_z[start_index:] = obs_z
-            cat_mass.resize(total_galaxies, axis=0)
-            cat_mass[start_index:] = stellar_mass
             cat_mag.resize(total_galaxies, axis=0)
             cat_mag[start_index:] = filtered_mag
     return cat_num
@@ -100,18 +98,15 @@ def create_random_catalogue(size):
         dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(0, 1, size))
 
         with h5py.File("data_catalogue.hdf5", "r") as data:
-            data_mass = np.array(data["StellarMass"])
             data_mag = np.array(data["ObsMagDust"])
             data_z = np.array(data["z"])
 
             z = np.random.default_rng().choice(data_z, size)
-            mass = np.random.default_rng().choice(data_mass, size)
             mag = np.random.default_rng().choice(data_mag, size)
             r = comoving_distance(z)
 
         catalogue.create_dataset("Pos", (size, 3), data=np.transpose([ra, dec, r]), dtype="f8")
         catalogue.create_dataset("z", (size,), data=z, dtype="f8")
-        catalogue.create_dataset("StellarMass", (size,), data=mass, dtype="f4")
         catalogue.create_dataset("ObsMagDust", (size, 5), data=mag, dtype="f4")
 
 
