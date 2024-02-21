@@ -30,27 +30,24 @@ interp_points_z = np.linspace(0, 1.5, num_interp_points)
 for i in range(num_interp_points):
     integration_range = np.linspace(0, interp_points_z[i], 100)
     interp_points_r[i] = np.trapz(c / (100*np.sqrt(Omega_m_0 * (1 + integration_range)**3 + Omega_Lambda_0)), integration_range)  # [cMpc/h]
-interp = interpolate.CubicSpline(interp_points_z, interp_points_r, extrapolate=False)
 
-
-def comoving_distance(z):
-    return interp(z)  # [cMpc/h]
+comoving_distance = interpolate.CubicSpline(interp_points_z, interp_points_r, extrapolate=False)  # [cMpc/h]
     
 
 def z_at_comoving_distance(r):
     if isinstance(r, np.ndarray):
         z = np.ndarray(r.shape[0])
         for i in range(r.shape[0]):
-            z[i] = optimize.root_scalar(lambda z: r[i] - interp(z), bracket=[0, 1.5]).root
+            z[i] = optimize.root_scalar(lambda z: r[i] - comoving_distance(z), bracket=[0, 1.5]).root
     else:
-        z = optimize.root_scalar(lambda z: r - interp(z), bracket=[0, 1.5]).root
+        z = optimize.root_scalar(lambda z: r - comoving_distance(z), bracket=[0, 1.5]).root
     return z
 
 
 def create_data_catalogue(dir, num_files):
     with h5py.File("data_catalogue.hdf5", "w") as catalogue:
         cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
-        cat_vel = catalogue.create_dataset("RadialVel", (0,), maxshape=(None,), dtype="f8")
+        cat_z = catalogue.create_dataset("z", (0,), maxshape=(None,), dtype="f8")
         cat_mass = catalogue.create_dataset("StellarMass", (0,), maxshape=(None,), dtype="f4")
         cat_mag = catalogue.create_dataset("ObsMagDust", (0, 5), maxshape=(None, 5), dtype="f4")
         cat_num = np.zeros(num_files, dtype="int")
@@ -61,27 +58,35 @@ def create_data_catalogue(dir, num_files):
 
                 mag_limit = 19.5  # r band, same as DESI Bright Galaxy Sample
                 mag = np.array(galaxies["ObsMagDust"])  # u g r i z, magnitude with k-correction and corrected for dust extinction
-                mag_filter = mag[:,2] < mag_limit
-                cat_num[index] = np.count_nonzero(mag_filter)
-
-                pos = np.array(galaxies["Pos"])[mag_filter]  # cMpc/h
-                vel = np.array(galaxies["Vel"])[mag_filter]  # km/s
-                stellar_mass = np.array(galaxies["StellarMass"])[mag_filter]  # 10^10 M_sol/h
-                filtered_mag = mag[mag_filter]  # mag
+                data_filter = mag[:,2] < mag_limit
+                
+                pos = np.array(galaxies["Pos"])[data_filter]  # [cMpc/h]
+                vel = np.array(galaxies["Vel"])[data_filter]  # [km/s]
+                stellar_mass = np.array(galaxies["StellarMass"])[data_filter]  # [10^10 M_sol/h]
+                filtered_mag = mag[data_filter]  # [mag]
             
-                R = np.sqrt(pos[:,0]**2 + pos[:,1]**2)  # cMpc/h
-                r = np.sqrt(R**2 + pos[:,2]**2)  # cMpc/h
-                dec = 90 - 180/np.pi * np.arctan2(R, pos[:,2])  # degrees
-                ra = 180/np.pi * np.arctan2(pos[:,1], pos[:,0])  # degrees
+            # calculate positions in spherical coordinates
+            R = np.sqrt(pos[:,0]**2 + pos[:,1]**2)  # [cMpc/h]
+            r = np.sqrt(R**2 + pos[:,2]**2)  # [cMpc/h]
+            dec = 90 - 180/np.pi * np.arctan2(R, pos[:,2])  # [degrees]
+            ra = 180/np.pi * np.arctan2(pos[:,1], pos[:,0])  # [degrees]
 
-                v_r = (vel[:,0]*pos[:,0] + vel[:,1]*pos[:,1] + vel[:,2]*pos[:,2]) / r  # km/s
+            # calculate radial peculiar velocity
+            v_r = (vel[:,0]*pos[:,0] + vel[:,1]*pos[:,1] + vel[:,2]*pos[:,2]) / r  # [km/s]
 
+            # calculate redshift space position by correcting for peculiar velocity
+            cosmo_z = z_at_comoving_distance(r)
+            obs_z = (1 + cosmo_z)*(1 + v_r/c) - 1  # correct to linear order
+            obs_r = comoving_distance(obs_z)  # [cMpc/h]
+
+            # add data to catalogue
+            cat_num[index] = np.count_nonzero(data_filter)
             total_galaxies = np.sum(cat_num)
             start_index = np.sum(cat_num[:index])
             cat_pos.resize(total_galaxies, axis=0)
-            cat_pos[start_index:] = np.transpose([ra, dec, r])
-            cat_vel.resize(total_galaxies, axis=0)
-            cat_vel[start_index:] = v_r
+            cat_pos[start_index:] = np.transpose([ra, dec, obs_r])
+            cat_z.resize(total_galaxies, axis=0)
+            cat_z[start_index:] = obs_z
             cat_mass.resize(total_galaxies, axis=0)
             cat_mass[start_index:] = stellar_mass
             cat_mag.resize(total_galaxies, axis=0)
@@ -102,10 +107,9 @@ def create_random_catalogue(size):
             z = np.random.default_rng().choice(data_z, size)
             mass = np.random.default_rng().choice(data_mass, size)
             mag = np.random.default_rng().choice(data_mag, size)
+            r = comoving_distance(z)
 
-            dist = comoving_distance(z)
-
-        catalogue.create_dataset("Pos", (size, 3), data=np.transpose([ra, dec, dist]), dtype="f8")
+        catalogue.create_dataset("Pos", (size, 3), data=np.transpose([ra, dec, r]), dtype="f8")
         catalogue.create_dataset("z", (size,), data=z, dtype="f8")
         catalogue.create_dataset("StellarMass", (size,), data=mass, dtype="f4")
         catalogue.create_dataset("ObsMagDust", (size, 5), data=mag, dtype="f4")
@@ -178,25 +182,6 @@ if __name__ == "__main__":
     print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
     print("Selected galaxies in each file: ", galaxy_numbers)
     print("Total galaxy number in catalogue: ", np.sum(galaxy_numbers))
-
-    with h5py.File("data_catalogue.hdf5", "r+") as catalogue:
-        pos = np.array(catalogue["Pos"])
-        v_r = np.array(catalogue["RadialVel"])
-
-        print("Calculating cosmological redshifts...")
-        cosmo_z = z_at_comoving_distance(pos[:,2])
-        print(f"Cosmological redshifts calculated, elapsed time: {datetime.now() - start_time}")
-
-        print("Calculating spectroscopic redshifts...")
-        spec_z = (1 + cosmo_z)*(1 + v_r/c) - 1  # correct to linear order
-        print(f"Spectroscopic redshifts calculated, elapsed time: {datetime.now() - start_time}")
-
-        print("Calculating redshift-space positions...")
-        rsd_dist = comoving_distance(spec_z)  # [cMpc/h]
-        print(f"Redshift-space positions calculated, elapsed time: {datetime.now() - start_time}")
-
-        catalogue["Pos"][:,2] = rsd_dist
-        catalogue.create_dataset("z", data=spec_z, dtype="f8")
 
     random_catalogue_size = 100000
     print(f"Creating random catalogue of size {random_catalogue_size}...")
