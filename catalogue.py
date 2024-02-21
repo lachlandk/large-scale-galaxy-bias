@@ -44,8 +44,9 @@ def z_at_comoving_distance(r):
     return z
 
 
-def create_data_catalogue(dir, num_files, mag_lim=19.5, mass_lim=0, z_lims=[0, 1.5]):
-    with h5py.File("data_catalogue.hdf5", "w") as catalogue:
+def create_data_catalogue(dir, num_files, save_name=None, mag_lim=19.5, mass_lim=0, z_lims=[0, 1.5]):
+    filename = f"data_catalogue_r={mag_lim}_m={mass_lim}_z={z_lims[0]}-{z_lims[1]}.hdf5" if save_name is None else save_name
+    with h5py.File(filename, "w") as catalogue:
         cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
         cat_z = catalogue.create_dataset("z", (0,), maxshape=(None,), dtype="f8")
         cat_mag = catalogue.create_dataset("ObsMagDust", (0, 5), maxshape=(None, 5), dtype="f4")
@@ -99,8 +100,8 @@ def create_data_catalogue(dir, num_files, mag_lim=19.5, mass_lim=0, z_lims=[0, 1
     return cat_num
 
 
-def create_random_catalogue(size):
-    with h5py.File("random_catalogue.hdf5", "w") as catalogue:
+def create_random_catalogue(size, save_name):
+    with h5py.File(save_name, "w") as catalogue:
         ra = np.random.default_rng().uniform(0 , 90, size)
         dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(0, 1, size))
 
@@ -180,14 +181,14 @@ if __name__ == "__main__":
     files = 155
 
     print("Creating galaxy catalogue...")
-    galaxy_numbers = create_data_catalogue(lightcone_dir, files)
+    galaxy_numbers = create_data_catalogue(lightcone_dir, files, save_name="data_catalogue.hdf5")
     print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
     print("Selected galaxies in each file: ", galaxy_numbers)
     print("Total galaxy number in catalogue: ", np.sum(galaxy_numbers))
 
     random_catalogue_size = 100000
     print(f"Creating random catalogue of size {random_catalogue_size}...")
-    create_random_catalogue(random_catalogue_size)
+    create_random_catalogue(random_catalogue_size, "random_catalogue.hdf5")
     print(f"Random catalogue created, elapsed time: {datetime.now() - start_time}")
 
     print("Plotting catalogue maps...")
