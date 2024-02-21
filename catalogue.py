@@ -77,10 +77,7 @@ def create_data_catalogue(dir, num_files, mag_lim=19.5, mass_lim=0, z_lims=[0, 1
             
             # apply redshift filter
             low_z_filter = obs_z > z_lims[0]
-            print(low_z_filter)
             high_z_filter = obs_z < z_lims[1]
-            print(high_z_filter)
-            print(comoving_distance(z_lims[0]), comoving_distance(z_lims[1]))
             z_filter = np.logical_and(low_z_filter, high_z_filter)
 
             obs_z = obs_z[z_filter]
