@@ -119,7 +119,7 @@ def create_random_catalogue(size, data_catalogue, save_name):
 
 
 def plot_catalogue(filename, save_name):
-    with h5py.File(filename, "r") as catalogue:
+    with h5py.File(f"catalogues/{filename}", "r") as catalogue:
         pos = np.array(catalogue["Pos"])
         mag = np.array(catalogue["ObsMagDust"])
         colour = mag[:,1] - mag[:,2]
