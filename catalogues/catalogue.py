@@ -100,12 +100,12 @@ def create_data_catalogue(dir, num_files, save_name=None, mag_lim=19.5, mass_lim
     return cat_num
 
 
-def create_random_catalogue(size, save_name):
-    with h5py.File(save_name, "w") as catalogue:
+def create_random_catalogue(size, data_catalogue, save_name):
+    with h5py.File(f"catalogues/{save_name}", "w") as catalogue:
         ra = np.random.default_rng().uniform(0 , 90, size)
         dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(0, 1, size))
 
-        with h5py.File("catalogues/data_catalogue.hdf5", "r") as data:
+        with h5py.File(f"catalogues/{data_catalogue}", "r") as data:
             data_mag = np.array(data["ObsMagDust"])
             data_z = np.array(data["z"])
 
@@ -172,7 +172,7 @@ def plot_catalogue(filename, save_name):
     # colorbar
     fig.colorbar(scatter, ax=ax2, label="g-r Colour (Observer Frame)")
 
-    plt.savefig(save_name)
+    plt.savefig(f"maps/{save_name}")
 
 
 if __name__ == "__main__":
@@ -181,17 +181,17 @@ if __name__ == "__main__":
     files = 155
 
     print("Creating galaxy catalogue...")
-    galaxy_numbers = create_data_catalogue(lightcone_dir, files, save_name="catalogues/data_catalogue.hdf5")
+    galaxy_numbers = create_data_catalogue(lightcone_dir, files, save_name="data_catalogue.hdf5")
     print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
     print("Selected galaxies in each file: ", galaxy_numbers)
     print("Total galaxy number in catalogue: ", np.sum(galaxy_numbers))
 
     random_catalogue_size = 100000
     print(f"Creating random catalogue of size {random_catalogue_size}...")
-    create_random_catalogue(random_catalogue_size, "catalogues/random_catalogue.hdf5")
+    create_random_catalogue(random_catalogue_size, "data_catalogue.hdf5", "random_catalogue.hdf5")
     print(f"Random catalogue created, elapsed time: {datetime.now() - start_time}")
 
     print("Plotting catalogue maps...")
-    plot_catalogue("data_catalogue.hdf5", "maps/data_catalogue_map.png")
-    plot_catalogue("random_catalogue.hdf5", "maps/random_catalogue_map.png")
+    plot_catalogue("data_catalogue.hdf5", "data_catalogue_map.png")
+    plot_catalogue("random_catalogue.hdf5", "random_catalogue_map.png")
     print(f"Catalogue maps plotted, elapsed time: {datetime.now() - start_time}")
