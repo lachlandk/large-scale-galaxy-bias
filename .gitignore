@@ -1,6 +1,6 @@
 # Python dev files
 /.venv
+**/__pycache__
 
 # Data Files
-data_catalogue.hdf5
-random_catalogue.hdf5
+*.hdf5

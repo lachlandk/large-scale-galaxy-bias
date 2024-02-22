@@ -45,7 +45,7 @@ def z_at_comoving_distance(r):
 
 
 def create_data_catalogue(dir, num_files, save_name=None, mag_lim=19.5, mass_lim=0, z_lims=[0, 1.5]):
-    filename = f"data_catalogue_r={mag_lim}_m={mass_lim}_z={z_lims[0]}-{z_lims[1]}.hdf5" if save_name is None else save_name
+    filename = f"catalogues/data_catalogue_r={mag_lim}_m={mass_lim}_z={z_lims[0]}-{z_lims[1]}.hdf5" if save_name is None else save_name
     with h5py.File(filename, "w") as catalogue:
         cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
         cat_z = catalogue.create_dataset("z", (0,), maxshape=(None,), dtype="f8")
@@ -105,7 +105,7 @@ def create_random_catalogue(size, save_name):
         ra = np.random.default_rng().uniform(0 , 90, size)
         dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(0, 1, size))
 
-        with h5py.File("data_catalogue.hdf5", "r") as data:
+        with h5py.File("catalogues/data_catalogue.hdf5", "r") as data:
             data_mag = np.array(data["ObsMagDust"])
             data_z = np.array(data["z"])
 
@@ -181,14 +181,14 @@ if __name__ == "__main__":
     files = 155
 
     print("Creating galaxy catalogue...")
-    galaxy_numbers = create_data_catalogue(lightcone_dir, files, save_name="data_catalogue.hdf5")
+    galaxy_numbers = create_data_catalogue(lightcone_dir, files, save_name="catalogues/data_catalogue.hdf5")
     print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
     print("Selected galaxies in each file: ", galaxy_numbers)
     print("Total galaxy number in catalogue: ", np.sum(galaxy_numbers))
 
     random_catalogue_size = 100000
     print(f"Creating random catalogue of size {random_catalogue_size}...")
-    create_random_catalogue(random_catalogue_size, "random_catalogue.hdf5")
+    create_random_catalogue(random_catalogue_size, "catalogues/random_catalogue.hdf5")
     print(f"Random catalogue created, elapsed time: {datetime.now() - start_time}")
 
     print("Plotting catalogue maps...")
