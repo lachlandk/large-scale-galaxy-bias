@@ -172,7 +172,7 @@ def plot_catalogue(filename, save_name):
     # colorbar
     fig.colorbar(scatter, ax=ax2, label="g-r Colour (Observer Frame)")
 
-    plt.savefig(f"maps/{save_name}")
+    plt.savefig(f"catalogues/{save_name}")
 
 
 if __name__ == "__main__":
