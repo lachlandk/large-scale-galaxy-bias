@@ -23,7 +23,7 @@ def correlation_function(data_catalogue, random_catalogue, s_bins, mu_max, nmu_b
     random_correlation_filename = f"correlation_functions/{random_catalogue.split('.')[0]}_pairs_nmu_bins={nmu_bins}.hdf5"
     try:
         with h5py.File(random_correlation_filename, "r") as save_file:
-            RR_pairs = save_file["npairs"]
+            RR_pairs = np.array(save_file["npairs"])
     except FileNotFoundError:
         with h5py.File(random_correlation_filename, "w") as save_file:
             RR_pairs = DDsmu_mocks(autocorr=True, cosmology=2, nthreads=10, mu_max=mu_max, nmu_bins=nmu_bins, binfile=s_bins, RA1=r_pos[:,0], DEC1=r_pos[:,1], CZ1=r_pos[:,2], is_comoving_dist=True)
