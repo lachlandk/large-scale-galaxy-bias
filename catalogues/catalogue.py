@@ -202,7 +202,7 @@ if __name__ == "__main__":
     z_bins = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
     mag_lim = 19.5
     mass_lim = 0
-    create_data_catalogue(lightcone_dir, files, z_bins, mag_lim, mass_lim, save_name="test_data.hdf5")
+    create_data_catalogue(lightcone_dir, files, z_bins, mag_lim, mass_lim, save_name="data_catalogue.hdf5")
     print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
 
     random_catalogue_size = 1000000
