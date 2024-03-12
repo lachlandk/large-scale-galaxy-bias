@@ -44,7 +44,7 @@ def z_at_comoving_distance(r):
     return z
 
 
-def create_data_catalogue(dir, num_files, z_bins, mag_lim, mass_lim, save_name=None):
+def create_data_catalogue(dir, num_files, z_bins, mag_lim=19.5, mass_lim=0, save_name=None):
     filename = f"data_catalogue_r<{mag_lim}_m>{mass_lim}_z={z_bins[0]}-{z_bins[-1]}.hdf5" if save_name is None else save_name
     
     with h5py.File(f"catalogues/{filename}", "w") as file:
@@ -199,15 +199,17 @@ if __name__ == "__main__":
     files = 155
 
     print("Creating galaxy catalogue...")
-    z_bins = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
-    mag_lim = 19.5
-    mass_lim = 0
-    create_data_catalogue(lightcone_dir, files, z_bins, mag_lim, mass_lim, save_name="data_catalogue.hdf5")
+    z_bins = [0, 0.005, 0.03, 0.3, 0.18, 1]
+    create_data_catalogue(lightcone_dir, files, z_bins, mag_lim=20, save_name="data_r<20.hdf5")
+    create_data_catalogue(lightcone_dir, files, z_bins, mag_lim=19, save_name="data_r<19.hdf5")
+    create_data_catalogue(lightcone_dir, files, z_bins, mag_lim=18, save_name="data_r<18.hdf5")
     print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
 
-    random_catalogue_size = 1000000
+    random_catalogue_size = 500000
     print(f"Creating random catalogue of size {random_catalogue_size}...")
-    create_random_catalogue(random_catalogue_size, "data_catalogue.hdf5", "random_catalogue.hdf5")
+    create_random_catalogue(random_catalogue_size, "data_r<20.hdf5", "random_r<20.hdf5")
+    create_random_catalogue(random_catalogue_size, "data_r<19.hdf5", "random_r<19.hdf5")
+    create_random_catalogue(random_catalogue_size, "data_r<18.hdf5", "random_r<18.hdf5")
     print(f"Random catalogue created, elapsed time: {datetime.now() - start_time}")
 
     # print("Plotting catalogue maps...")
