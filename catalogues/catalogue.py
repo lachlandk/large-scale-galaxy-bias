@@ -30,9 +30,14 @@ interp_points_z = np.linspace(0, 1.5, num_interp_points)
 for i in range(num_interp_points):
     integration_range = np.linspace(0, interp_points_z[i], 100)
     interp_points_r[i] = np.trapz(c / (100*np.sqrt(Omega_m_0 * (1 + integration_range)**3 + Omega_Lambda_0)), integration_range)  # [cMpc/h]
+comoving_distance_interp = interpolate.CubicSpline(interp_points_z, interp_points_r, extrapolate=False)  # [cMpc/h]
 
-comoving_distance = interpolate.CubicSpline(interp_points_z, interp_points_r, extrapolate=False)  # [cMpc/h]
-    
+
+def comoving_distance(z):
+    if isinstance(z, np.ndarray):
+        return comoving_distance_interp(z.clip(0, None))
+    else:
+        return comoving_distance_interp(z) if z > 0 else 0
 
 def z_at_comoving_distance(r):
     if isinstance(r, np.ndarray):
@@ -75,28 +80,32 @@ def create_data_catalogue(dir, num_files, z_bins, mag_lim=19.5, mass_lim=0, save
                 v_r = (vel[:,0]*pos[:,0] + vel[:,1]*pos[:,1] + vel[:,2]*pos[:,2]) / r  # [km/s]
 
                 for i in range(len(z_bins) - 1):
+                    # calculate an upper bound on the size of the bin in real space
+                    lower_dist_bound = comoving_distance((1 + z_bins[i])/(1 + np.max(v_r)/c) - 1)
+                    upper_dist_bound = comoving_distance((1 + z_bins[i+1])/(1 + np.min(v_r)/c) - 1) 
+
+                    mag_filter = mag[:,2] < mag_lim  # magnitude limit in r band, 19.5 is the limit for DESI Bright Galaxy Sample
+                    mass_filter = mass > mass_lim  # lower mass limit
+                    data_filter = mag_filter & mass_filter & (r > lower_dist_bound) & (r < upper_dist_bound)
+
+                    # calculate redshift space position by correcting for peculiar velocity
+                    cosmo_z = z_at_comoving_distance(r[data_filter])
+                    obs_z = (1 + cosmo_z)*(1 + v_r[data_filter]/c) - 1  # correct to linear order
+                    
+                    # apply redshift bin filter
+                    z_filter = (obs_z > z_bins[i]) & (obs_z < z_bins[i+1])
+                    obs_r = comoving_distance(obs_z[z_filter])  # [cMpc/h]
+                    ra = 180/np.pi * np.arctan2(pos[data_filter][z_filter][:,1], pos[data_filter][z_filter][:,0])  # [degrees]
+                    dec = 90 - 180/np.pi * np.arctan2(R[data_filter][z_filter], pos[data_filter][z_filter][:,2])  # [degrees]
+
+                    # add data to catalogue
                     catalogue = file[f"{z_bins[i]}<z<{z_bins[i+1]}"]
                     cat_pos = catalogue["Pos"]
                     cat_dist = catalogue["ObsDist"]
                     cat_spec_z = catalogue["SpecZ"]
                     cat_obs_z = catalogue["ObsZ"]
                     cat_mag = catalogue["ObsMagDust"]
-                        
-                    mag_filter = mag[:,2] < mag_lim  # magnitude limit in r band, 19.5 is the limit for DESI Bright Galaxy Sample
-                    mass_filter = mass > mass_lim  # lower mass limit
-                    data_filter = np.logical_and(mag_filter, mass_filter)
 
-                    # calculate redshift space position by correcting for peculiar velocity
-                    cosmo_z = z_at_comoving_distance(r[data_filter])
-                    obs_z = (1 + cosmo_z)*(1 + v_r[data_filter]/c) - 1  # correct to linear order
-                    
-                    # apply redshift filter
-                    z_filter = np.logical_and(obs_z > z_bins[i], obs_z < z_bins[i+1])
-                    obs_r = comoving_distance(obs_z[z_filter])  # [cMpc/h]
-                    ra = 180/np.pi * np.arctan2(pos[data_filter][z_filter][:,1], pos[data_filter][z_filter][:,0])  # [degrees]
-                    dec = 90 - 180/np.pi * np.arctan2(R[data_filter][z_filter], pos[data_filter][z_filter][:,2])  # [degrees]
-
-                    # add data to catalogue
                     start_index = cat_pos.shape[0]
                     total_galaxies = start_index + np.count_nonzero(z_filter)
                     cat_pos.resize(total_galaxies, axis=0)
@@ -199,17 +208,12 @@ if __name__ == "__main__":
     files = 155
 
     print("Creating galaxy catalogue...")
-    z_bins = [0, 0.005, 0.03, 0.3, 0.18, 1]
-    create_data_catalogue(lightcone_dir, files, z_bins, mag_lim=20, save_name="data_r<20.hdf5")
-    create_data_catalogue(lightcone_dir, files, z_bins, mag_lim=19, save_name="data_r<19.hdf5")
-    create_data_catalogue(lightcone_dir, files, z_bins, mag_lim=18, save_name="data_r<18.hdf5")
+    create_data_catalogue(lightcone_dir, files, [0.2, 0.5], mag_lim=19.5, save_name="data_catalogue.hdf5")
     print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
 
-    random_catalogue_size = 500000
+    random_catalogue_size = 1000000
     print(f"Creating random catalogue of size {random_catalogue_size}...")
-    create_random_catalogue(random_catalogue_size, "data_r<20.hdf5", "random_r<20.hdf5")
-    create_random_catalogue(random_catalogue_size, "data_r<19.hdf5", "random_r<19.hdf5")
-    create_random_catalogue(random_catalogue_size, "data_r<18.hdf5", "random_r<18.hdf5")
+    create_random_catalogue(random_catalogue_size, "data_catalogue.hdf5", "random_catalogue.hdf5")
     print(f"Random catalogue created, elapsed time: {datetime.now() - start_time}")
 
     # print("Plotting catalogue maps...")
