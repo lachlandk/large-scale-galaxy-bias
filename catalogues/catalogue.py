@@ -146,60 +146,91 @@ def create_random_catalogue(size, data_catalogue, save_name):
 
 
 def plot_catalogue(filename, save_name):
+    cat_pos = []
+    cat_dist = []
+    cat_mag = []
     with h5py.File(f"catalogues/{filename}", "r") as catalogue:
-        pos = np.array(catalogue["Pos"])
-        mag = np.array(catalogue["ObsMagDust"])
-        colour = mag[:,1] - mag[:,2]
+        for z_bin in catalogue:
+            cat_pos.append(np.array(catalogue[z_bin]["Pos"]))
+            cat_dist.append(np.array(catalogue[z_bin]["ObsDist"]))
+            cat_mag.append(np.array(catalogue[z_bin]["ObsMagDust"]))
+    pos = np.concatenate(cat_pos)
+    dist = np.concatenate(cat_dist)
+    mag = np.concatenate(cat_mag)
+    colour = mag[:,1] - mag[:,2]
 
-    fig = plt.figure(figsize=(50, 25))
-    fig.suptitle("Catalogue Map", fontsize=40)
-
-    # sky projection
-    ax1 = fig.add_subplot(121)
-    ax1.set_title("Light cone projected onto the sky")
-
-    map = Basemap(projection="ortho", lat_0=45, lon_0=45, ax=ax1)
-    map.drawmeridians(np.arange(0, 360, 30), color="white", dashes=(None, None), latmax=90)
-    map.drawparallels(np.arange(-90, 90, 30), color="white", dashes=(None, None))
-    map.drawmapboundary(fill_color="black")
-
-    scatter = map.scatter(pos[:,0], pos[:,1], latlon=True, c=colour, cmap="spring", s=0.1, marker=".")
+    fig = plt.figure(figsize=(50, 50))
+    fig.set_layout_engine("constrained")
+    fig.suptitle("Galaxy Catalogue", fontsize=50)
 
     # plane projection
     tr_scale = Affine2D().scale(np.pi/180.0, 1.0)
     transform = tr_scale + PolarAxes.PolarTransform()
-    grid_locator1 = angle_helper.LocatorHMS(8)
-    tick_formatter1 = angle_helper.FormatterHMS()
+    grid_locator1 = angle_helper.LocatorDMS(8)
+    tick_formatter1 = angle_helper.FormatterDMS()
     grid_locator2 = MaxNLocator(3)
     grid_helper = GridHelperCurveLinear(transform, extremes=(90, 0, np.max(pos[:,2]), 0), grid_locator1=grid_locator1, grid_locator2=grid_locator2, tick_formatter1=tick_formatter1, tick_formatter2=None)
-    ax2 = fig.add_subplot(122, axes_class=FloatingAxes, grid_helper=grid_helper)
-    ax2.set_title("Light cone projected into 2D")
+    
+    ax1 = fig.add_subplot(221, axes_class=FloatingAxes, grid_helper=grid_helper)
+    ax1.set_title("Light Cone in Real Space")
+    ax1.set_facecolor("black")
+    ax2 = fig.add_subplot(222, axes_class=FloatingAxes, grid_helper=grid_helper)
+    ax2.set_title("Light Cone in Redshift Space")
     ax2.set_facecolor("black")
 
     # distance axis ticks and label
+    ax1.axis["left"].toggle(ticklabels=False)
+    ax1.axis["right"].toggle(ticklabels=True)
+    ax1.axis["right"].set_axis_direction("bottom")
+    ax1.axis["right"].label.set_visible(True)
+    ax1.axis["right"].label.set_text("True Distance [cMpc/h]")
     ax2.axis["left"].toggle(ticklabels=False)
     ax2.axis["right"].toggle(ticklabels=True)
     ax2.axis["right"].set_axis_direction("bottom")
     ax2.axis["right"].label.set_visible(True)
-    ax2.axis["right"].label.set_text("Distance [cMpc/h]")
+    ax2.axis["right"].label.set_text("Observed Distance [cMpc/h]")
 
     # angle axis ticks and label
+    ax1.axis["bottom"].major_ticklabels.set_axis_direction("top")
+    ax1.axis["bottom"].label.set_axis_direction("top")
+    ax1.axis["bottom"].label.set_text("Right Ascension [deg]")
+    ax1.axis["top"].set_visible(False)
     ax2.axis["bottom"].major_ticklabels.set_axis_direction("top")
     ax2.axis["bottom"].label.set_axis_direction("top")
-    ax2.axis["bottom"].label.set_text("RA")
-
+    ax2.axis["bottom"].label.set_text("Right Ascension [deg]")
     ax2.axis["top"].set_visible(False)
 
-    aux_ax = ax2.get_aux_axes(transform)
-    aux_ax.patch = ax2.patch
+    aux_ax1 = ax1.get_aux_axes(transform)
+    aux_ax1.patch = ax1.patch
+    ax1.patch.zorder = 0
+    aux_ax2 = ax2.get_aux_axes(transform)
+    aux_ax2.patch = ax2.patch
     ax2.patch.zorder = 0
+    aux_ax1.scatter(pos[:,0], pos[:,2], c=colour, cmap="spring", s=0.01, marker=".")
+    scatter = aux_ax2.scatter(pos[:,0], dist, c=colour, cmap="spring", s=0.01, marker=".")
 
-    scatter = aux_ax.scatter(pos[:,0], pos[:,2], c=colour, cmap="spring", s=0.01, marker=".")
+    # colourbar
+    colourbar = fig.colorbar(scatter, ax=ax2)
+    colourbar.set_label("g-r Colour (Observer Frame)", labelpad=15)
 
-    # colorbar
-    fig.colorbar(scatter, ax=ax2, label="g-r Colour (Observer Frame)")
+    # sky projection
+    ax3 = fig.add_subplot(223)
+    ax3.set_title("Light Cone Projected onto the Sky")
 
-    plt.savefig(f"catalogues/{save_name}")
+    map = Basemap(projection="ortho", lat_0=35, lon_0=45, ax=ax3)
+    map.drawmeridians(np.arange(0, 360, 30), color="white", dashes=(None, None), latmax=90)
+    map.drawparallels(np.arange(-90, 90, 30), color="white", dashes=(None, None))
+    for meridian in np.arange(0, 120, 30):
+        ax3.annotate(f"{meridian}$^\\circ$", map(meridian + 2, -6), size=30, color="white")
+    for parallel in np.arange(0, 90, 30):
+        ax3.annotate(f"{parallel}$^\\circ$", map(92, parallel + 3), size=30, color="white")
+    ax3.annotate("Right Ascension [deg]", map(32, -13), size=30, color="white")
+    ax3.annotate("Declination [deg]", map(78, 44), size=30, rotation=-57, color="white")
+    map.drawmapboundary(fill_color="black")
+
+    map.scatter(pos[:,0], pos[:,1], latlon=True, c=colour, cmap="spring", s=0.1, alpha=0.2, marker=".")
+
+    fig.savefig(f"catalogues/{save_name}")
 
 
 if __name__ == "__main__":
@@ -216,7 +247,6 @@ if __name__ == "__main__":
     create_random_catalogue(random_catalogue_size, "data_catalogue.hdf5", "random_catalogue.hdf5")
     print(f"Random catalogue created, elapsed time: {datetime.now() - start_time}")
 
-    # print("Plotting catalogue maps...")
-    # plot_catalogue("data_catalogue.hdf5", "data_catalogue_map.png")
-    # plot_catalogue("random_catalogue.hdf5", "random_catalogue_map.png")
-    # print(f"Catalogue maps plotted, elapsed time: {datetime.now() - start_time}")
+    print("Plotting catalogue map...")
+    plot_catalogue("data_catalogue.hdf5", "data_catalogue_map.png")
+    print(f"Catalogue map plotted, elapsed time: {datetime.now() - start_time}")
