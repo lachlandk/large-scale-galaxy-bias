@@ -211,7 +211,7 @@ def plot_catalogue(filename, save_name):
 
     # colourbar
     colourbar = fig.colorbar(scatter, ax=ax2)
-    colourbar.set_label("g-r Colour (Observer Frame)", labelpad=15)
+    colourbar.set_label("g-r Colour (Rest Frame)", labelpad=15)
 
     # sky projection
     ax3 = fig.add_subplot(223)
