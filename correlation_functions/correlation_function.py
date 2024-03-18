@@ -1,18 +1,33 @@
 import h5py
 import numpy as np
-from tqdm import trange
 from datetime import datetime
 import matplotlib.pyplot as plt
-from Corrfunc.utils import convert_3d_counts_to_cf
 from Corrfunc.mocks.DDsmu_mocks import DDsmu_mocks
 
 
-def correlation_function(data_catalogue, random_catalogue, s_bins, mu_max, nmu_bins, rsd=True, save_name=None):
+def correlation_function(data_catalogue, random_catalogue, s_bins, rsd=True, save_name=None):
     start_time = datetime.now()
 
     # count pairs
+    # calculate_flags = {"DD": False, "RR": False, "DR": False}
+    # filename = f"correlation_functions/corrfunc_{data_catalogue.split('.')[0]}_{random_catalogue.split('.')[0]}_nmu_bins={nmu_bins}.hdf5"
+    # try:
+    #     with h5py.File(filename, "r") as pairs:
+    #         for dataset in ("DD", "RR", "DR"):
+    #             try:
+    #                 for z_bin in pairs:
+    #                     z_bins.append(z_bin)
+    #                     DD_pairs.append(np.array(pairs[z_bin][dataset]))
+    #             except KeyError:
+    #                 calculate_flags[dataset] = True
+    # except FileNotFoundError:
+    #     with h5py.File(filename, "w") as pairs:
+    #         print("Counting data pairs...")
+
+    nmu_bins = 100
+
     print("Counting data pairs...")
-    filename = f"correlation_functions/DD_pair_counts_{data_catalogue.split('.')[0]}_nmu_bins={nmu_bins}.hdf5"
+    filename = f"correlation_functions/DD_pair_counts_{data_catalogue.split('.')[0]}.hdf5"
     z_bins = []
     DD_pairs = []
     try:
@@ -27,13 +42,13 @@ def correlation_function(data_catalogue, random_catalogue, s_bins, mu_max, nmu_b
                 pos = np.array(catalogue[z_bin]["Pos"])
                 dist = np.array(catalogue[z_bin]["ObsDist"]) if rsd == True else pos[:,2] 
                 print(f"Galaxies in bin {z_bin}: {pos.shape[0]}")
-                pairs = DDsmu_mocks(autocorr=True, cosmology=2, nthreads=10, mu_max=mu_max, nmu_bins=nmu_bins, binfile=s_bins, RA1=pos[:,0], DEC1=pos[:,1], CZ1=dist, is_comoving_dist=True)
-                save.create_dataset("npairs", data=pairs["npairs"])
-                DD_pairs.append(pairs["npairs"])
+                pairs = (1/(pos.shape[0]**2)) * DDsmu_mocks(autocorr=True, cosmology=2, nthreads=10, mu_max=1, nmu_bins=nmu_bins, binfile=s_bins, RA1=pos[:,0], DEC1=pos[:,1], CZ1=dist, is_comoving_dist=True)["npairs"]
+                save.create_dataset("npairs", data=pairs)
+                DD_pairs.append(pairs)
     print(f"Data pairs counted, elapsed time: {datetime.now() - start_time}")
     
     print("Counting random pairs...")
-    filename = f"correlation_functions/RR_pair_counts_{random_catalogue.split('.')[0]}_nmu_bins={nmu_bins}.hdf5"
+    filename = f"correlation_functions/RR_pair_counts_{random_catalogue.split('.')[0]}.hdf5"
     RR_pairs = []
     try:
         with h5py.File(filename, "r") as random_pairs:
@@ -46,18 +61,20 @@ def correlation_function(data_catalogue, random_catalogue, s_bins, mu_max, nmu_b
                 pos = np.array(catalogue[z_bin]["Pos"])
                 dist = np.array(catalogue[z_bin]["ObsDist"]) if rsd == True else pos[:,2] 
                 print(f"Galaxies in bin {z_bin}: {pos.shape[0]}")
-                pairs = DDsmu_mocks(autocorr=True, cosmology=2, nthreads=10, mu_max=mu_max, nmu_bins=nmu_bins, binfile=s_bins, RA1=pos[:,0], DEC1=pos[:,1], CZ1=dist, is_comoving_dist=True)
-                save.create_dataset("npairs", data=pairs["npairs"])
-                RR_pairs.append(pairs["npairs"])
+                pairs = (1/(pos.shape[0]**2)) * DDsmu_mocks(autocorr=True, cosmology=2, nthreads=10, mu_max=1, nmu_bins=nmu_bins, binfile=s_bins, RA1=pos[:,0], DEC1=pos[:,1], CZ1=dist, is_comoving_dist=True)["npairs"]
+                save.create_dataset("npairs", data=pairs)
+                RR_pairs.append(pairs)
     print(f"Random pairs counted, elapsed time: {datetime.now() - start_time}")
     
     print("Counting data-random pairs...")
-    filename = f"correlation_functions/DR_pair_counts_{data_catalogue.split('.')[0]}_{random_catalogue.split('.')[0]}_nmu_bins={nmu_bins}.hdf5"
+    filename = f"correlation_functions/DR_pair_counts_{data_catalogue.split('.')[0]}_{random_catalogue.split('.')[0]}.hdf5"
     DR_pairs = []
     try:
         with h5py.File(filename, "r") as data_random_pairs:
+            mu = data_random_pairs.attrs["mu"]
             for z_bin in data_random_pairs:
                 DR_pairs.append(np.array(data_random_pairs[z_bin]["npairs"]))
+
     except FileNotFoundError:
         with h5py.File(filename, "w") as data_random_pairs, h5py.File(f"catalogues/{data_catalogue}", "r") as data, h5py.File(f"catalogues/{random_catalogue}", "r") as random:
             for z_bin in data:
@@ -67,11 +84,14 @@ def correlation_function(data_catalogue, random_catalogue, s_bins, mu_max, nmu_b
                 r_pos = np.array(random[z_bin]["Pos"])
                 r_dist = np.array(random[z_bin]["ObsDist"]) if rsd == True else r_pos[:,2] 
                 print(f"Galaxies in bin {z_bin}: Data={d_pos.shape[0]}, Random={r_pos.shape[0]}")
-                pairs = DDsmu_mocks(autocorr=False, cosmology=2, nthreads=10, mu_max=mu_max, nmu_bins=nmu_bins, binfile=s_bins, RA1=d_pos[:,0], DEC1=d_pos[:,1], CZ1=d_dist, RA2=r_pos[:,0], DEC2=r_pos[:,1], CZ2=r_dist, is_comoving_dist=True)
-                dataset = save.create_dataset("npairs", data=pairs["npairs"])
+                count = DDsmu_mocks(autocorr=False, cosmology=2, nthreads=10, mu_max=1, nmu_bins=nmu_bins, binfile=s_bins, RA1=d_pos[:,0], DEC1=d_pos[:,1], CZ1=d_dist, RA2=r_pos[:,0], DEC2=r_pos[:,1], CZ2=r_dist, is_comoving_dist=True)
+                mu = count["mumax"][0:nmu_bins]
+                pairs = (1/(d_pos.shape[0] * r_pos.shape[0])) * count["npairs"]
+                dataset = save.create_dataset("npairs", data=pairs)
                 dataset.attrs["ndata"] = d_pos.shape[0]
                 dataset.attrs["nrandom"] = r_pos.shape[0]
-                DR_pairs.append(pairs["npairs"])
+                data_random_pairs.attrs["mu"] = mu
+                DR_pairs.append(pairs)
     print(f"Data-random pairs counted, elapsed time: {datetime.now() - start_time}")
 
     # calculate correlation function
@@ -79,74 +99,40 @@ def correlation_function(data_catalogue, random_catalogue, s_bins, mu_max, nmu_b
     corrfunc = []
     with h5py.File(f"catalogues/{data_catalogue}", "r") as data, h5py.File(f"catalogues/{random_catalogue}", "r") as random:
             for i, z_bin in enumerate(data):
-                data_length = data[z_bin]["Pos"].shape[0]
-                random_length = random[z_bin]["Pos"].shape[0]
-                corrfunc.append(convert_3d_counts_to_cf(data_length, data_length, random_length, random_length, DD_pairs[i], DR_pairs[i], DR_pairs[i], RR_pairs[i]))
+                corrfunc.append((DD_pairs[i] - 2*DR_pairs[i] + RR_pairs[i]) / RR_pairs[i])
     print(f"Correction function calculated, elapsed time: {datetime.now() - start_time}")
 
-    # figure out if xi is a function of one or two variables
-    if nmu_bins == 1:
-        if save_name is not None:
-            with h5py.File(f"correlation_functions/{save_name}", "w") as save_file:
-                save_file.create_dataset("xi", data=corrfunc)
-        return corrfunc, z_bins
-    # else:
-    #     # xi is a two variable function, calculate moments
-    #     print(f"Calculating moments...")
-    #     mu = DD_pairs["mumax"][:nmu_bins]
-    #     corrfunc_length_1D = corrfunc.shape[0] // nmu_bins
-    #     xi_0 = np.ndarray(corrfunc_length_1D)
-    #     xi_1 = np.ndarray(corrfunc_length_1D)
-    #     xi_2 = np.ndarray(corrfunc_length_1D)
-    #     xi_3 = np.ndarray(corrfunc_length_1D)
-    #     xi_4 = np.ndarray(corrfunc_length_1D)
+    xi = []
+    for i in range(len(z_bins)):
+        xi_multipoles = np.ndarray((5, len(s_bins) - 1))
+        for j in range(len(s_bins) - 1):
+            k = nmu_bins*j
+            xi_multipoles[0, j] = np.trapz(corrfunc[i][k:k+nmu_bins], mu)  # monopole
+            xi_multipoles[1, j] = 3 * np.trapz(corrfunc[i][k:k+nmu_bins] * mu, mu)  # dipole
+            xi_multipoles[2, j] = 5 * np.trapz(corrfunc[i][k:k+nmu_bins] * 0.5 * (3*mu**2 - 1), mu)  # quadrupole
+            xi_multipoles[3, j] = 7 * np.trapz(corrfunc[i][k:k+nmu_bins] * 0.5 * (5*mu**3 - 3*mu), mu)  # octupole
+            xi_multipoles[4, j] = 9 * np.trapz(corrfunc[i][k:k+nmu_bins] * 0.125 * (35*mu**4 - 30*mu**2 + 3), mu)  # hexadecapole
+        xi.append(xi_multipoles)
 
-    #     for i in trange(s_bins.shape[0] - 1):
-    #         j = nmu_bins*i
-    #         xi_0[i] = np.trapz(corrfunc[j:j+nmu_bins], mu)
-    #         xi_1[i] = 3 * np.trapz(corrfunc[j:j+nmu_bins] * mu, mu)
-    #         xi_2[i] = 5 * np.trapz(corrfunc[j:j+nmu_bins] * 0.5 * (3*mu**2 - 1), mu)
-    #         xi_3[i] = 7 * np.trapz(corrfunc[j:j+nmu_bins] * 0.5 * (5*mu**3 - 3*mu), mu)
-    #         xi_4[i] = 9 * np.trapz(corrfunc[j:j+nmu_bins] * 0.125 * (35*mu**4 - 30*mu**2 + 3), mu)
-    #     print(f"Moments calculated, elapsed time: {datetime.now() - start_time}")
-
-    #     if save_name is not None:
-    #         with h5py.File(f"correlation_functions/{save_name}", "w") as save_file:
-    #             save_file.create_dataset("xi_0", data=xi_0)
-    #             save_file.create_dataset("xi_1", data=xi_1)
-    #             save_file.create_dataset("xi_2", data=xi_2)
-    #             save_file.create_dataset("xi_3", data=xi_3)
-    #             save_file.create_dataset("xi_4", data=xi_4)
-
-    #     return (xi_0, xi_1, xi_2, xi_3, xi_4)
+    if save_name is not None:
+        with h5py.File(f"correlation_functions/{save_name}", "w") as save_file:
+            save_file.create_dataset("xi", data=xi)
+    return xi, z_bins
 
 
 if __name__ == "__main__":
+    h = 0.6774
     s = np.linspace(0.1, 200, 101)
 
-    xi, z_bins = correlation_function("data_catalgoue.hdf5", "random_catalogue.hdf5", s, 1, 1, rsd=False)
-    # (xi_0, xi_1, xi_2, xi_3, xi_4) = correlation_function("data_catalogue.hdf5", "random_catalogue.hdf5", s, 1, 100)
+    xi_A, z_bins = correlation_function("data_catalogue_A.hdf5", "random_catalogue_A.hdf5", s, rsd=False)
+    xi_B, z_bins = correlation_function("data_catalogue_B.hdf5", "random_catalogue_B.hdf5", s, rsd=False)
+    xi = [(xi_A_bin + xi_B_bin) / 2 for xi_A_bin, xi_B_bin in zip(xi_A, xi_B)]
 
-    # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
-    fig, ax1 = plt.subplots(1, 1, figsize=(10, 10))
+    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    fig.suptitle("Correlation Function in Real Space")
 
-    for i in range(5):
-        ax1.plot(s[:-1], s[:-1]**2 * xi[i], label=z_bins[i])
-    ax1.set_xlabel("s [cMpc/h]")
-    ax1.set_ylabel("$s^2\\xi [(cMpc/h)^2]$")
-    ax1.set_ylim(0, 100)
-    ax1.legend()
-
-    fig.suptitle("Correlation Function for r<19.5")
-
-    # ax2.plot(s[:-1], xi_0, label="Monopole")
-    # ax2.plot(s[:-1], xi_1, label="Dipole")
-    # ax2.plot(s[:-1], xi_2, label="Quadrupole")
-    # ax2.plot(s[:-1], xi_3, label="Octupole")
-    # ax2.plot(s[:-1], xi_4, label="Hexadecapole")
-    # ax2.set_xlabel("s [cMpc/h]")
-    # ax2.set_ylabel("Multipole moments of $\\xi$")
-    # ax2.set_yscale("log")
-    # ax2.legend()
-
-    plt.savefig("correlation_functions/corrfunc.png")
+    ax.plot(s[:-1]/h, s[:-1]**2 * xi[0]/(h**2))
+    ax.set_xlabel("$r$ [cMpc/h]")
+    ax.set_ylabel("$r^2\\xi(r)$ [(cMpc/h)$^2$]")
+    
+    fig.savefig("correlation_functions/corrfunc.png")
