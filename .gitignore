@@ -4,3 +4,5 @@
 
 # Data Files
 *.hdf5
+*txt
+*fits
