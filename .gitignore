@@ -4,6 +4,8 @@
 
 # Data files
 *.hdf5
+*txt
+*fits
 
 # LaTeX files
 *.synctex.gz

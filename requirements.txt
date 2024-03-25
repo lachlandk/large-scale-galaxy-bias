@@ -2,7 +2,9 @@ basemap
 colossus
 corrfunc
 h5py
+healpy
 matplotlib
+numba
 numpy
 scipy
 tqdm
