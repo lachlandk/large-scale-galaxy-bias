@@ -1,7 +1,6 @@
 import h5py
 import numpy as np
 from tqdm import trange
-from datetime import datetime
 from scipy import optimize, interpolate
 import matplotlib.pyplot as plt
 import mpl_toolkits.axisartist.angle_helper as angle_helper
@@ -38,6 +37,7 @@ def comoving_distance(z):
         return comoving_distance_interp(z.clip(0, None))
     else:
         return comoving_distance_interp(z) if z > 0 else 0
+    
 
 def z_at_comoving_distance(r):
     if isinstance(r, np.ndarray):
@@ -49,22 +49,27 @@ def z_at_comoving_distance(r):
     return z
 
 
-def create_data_catalogue(dir, num_files, z_bins, mag_lim=19.5, mass_lim=0, save_name=None):
-    filename = f"data_catalogue_r<{mag_lim}_m>{mass_lim}_z={z_bins[0]}-{z_bins[-1]}.hdf5" if save_name is None else save_name
-    
-    with h5py.File(f"catalogues/{filename}", "w") as file:
-        # create catalogues
-        for i in range(len(z_bins) - 1):
-            catalogue = file.create_group(f"{z_bins[i]}<z<{z_bins[i+1]}")
-            cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
-            cat_dist = catalogue.create_dataset("ObsDist", (0,), maxshape=(None,), dtype="f8")
-            cat_spec_z = catalogue.create_dataset("SpecZ", (0,), maxshape=(None,), dtype="f8")
-            cat_obs_z = catalogue.create_dataset("ObsZ", (0,), maxshape=(None,), dtype="f8")
-            cat_mag = catalogue.create_dataset("ObsMagDust", (0, 5), maxshape=(None, 5), dtype="f4")
+def observed_redshift(cosmo_z, v_r):
+    return (1 + cosmo_z)*(1 + v_r/c) - 1  # correct to linear order
+
+
+def cosmological_redshift(obs_z, v_r):
+    return (1 + obs_z)/(1 + v_r/c) - 1  # correct to linear order
+
+
+def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, np.inf), mag_lims=(-np.inf, 19.5), mass_lims=(-np.inf, np.inf)):
+    with h5py.File(f"catalogues/{save_file}", "a") as file:
+        catalogue = file.create_group(save_catalogue)
+        cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
+        cat_dist = catalogue.create_dataset("ObsDist", (0,), maxshape=(None,), dtype="f8")
+        cat_spec_z = catalogue.create_dataset("SpecZ", (0,), maxshape=(None,), dtype="f8")
+        cat_obs_z = catalogue.create_dataset("ObsZ", (0,), maxshape=(None,), dtype="f8")
+        cat_mag = catalogue.create_dataset("ObsMagDust", (0, 5), maxshape=(None, 5), dtype="f4")
+        cat_mass = catalogue.create_dataset("StellarMass", (0,), maxshape=(None,), dtype="f4")
 
         # generate catalogues from data
         for index in trange(num_files):
-            with h5py.File(f"{dir}gal_cone_01.{index}.hdf5", "r") as data:
+            with h5py.File(f"{dir}/gal_cone_01.{index}.hdf5", "r") as data:
                 galaxies = data["Galaxies"]
                 mag = np.array(galaxies["ObsMagDust"])  # u g r i z, magnitude with k-correction and corrected for dust extinction
                 mass = np.log10(1e10 * np.array(galaxies["StellarMass"])) # [log_10(M_sol/h)]
@@ -79,73 +84,62 @@ def create_data_catalogue(dir, num_files, z_bins, mag_lim=19.5, mass_lim=0, save
                 # calculate radial peculiar velocity
                 v_r = (vel[:,0]*pos[:,0] + vel[:,1]*pos[:,1] + vel[:,2]*pos[:,2]) / r  # [km/s]
 
-                for i in range(len(z_bins) - 1):
-                    # calculate an upper bound on the size of the bin in real space
-                    lower_dist_bound = comoving_distance((1 + z_bins[i])/(1 + np.max(v_r)/c) - 1)
-                    upper_dist_bound = comoving_distance((1 + z_bins[i+1])/(1 + np.min(v_r)/c) - 1) 
+                # calculate an upper bound on the size of the bin in real space
+                lower_dist_bound = comoving_distance(cosmological_redshift(z_lims[0], np.max(v_r)))
+                upper_dist_bound = comoving_distance(cosmological_redshift(z_lims[1], np.min(v_r)))
 
-                    mag_filter = mag[:,2] < mag_lim  # magnitude limit in r band, 19.5 is the limit for DESI Bright Galaxy Sample
-                    mass_filter = mass > mass_lim  # lower mass limit
-                    data_filter = mag_filter & mass_filter & (r > lower_dist_bound) & (r < upper_dist_bound)
+                approx_dist_filter = (r > lower_dist_bound) & (r < upper_dist_bound)
+                mag_filter = (mag[:,2] > mag_lims[0]) & (mag[:,2] < mag_lims[1])  # magnitude limit in r band
+                mass_filter = (mass > mass_lims[0]) & (mass < mass_lims[1])  # mass limits in log10 M_sol
+                data_filter = approx_dist_filter & mag_filter & mass_filter
 
-                    # calculate redshift space position by correcting for peculiar velocity
-                    cosmo_z = z_at_comoving_distance(r[data_filter])
-                    obs_z = (1 + cosmo_z)*(1 + v_r[data_filter]/c) - 1  # correct to linear order
-                    
-                    # apply redshift bin filter
-                    z_filter = (obs_z > z_bins[i]) & (obs_z < z_bins[i+1])
-                    obs_r = comoving_distance(obs_z[z_filter])  # [cMpc/h]
-                    ra = 180/np.pi * np.arctan2(pos[data_filter][z_filter][:,1], pos[data_filter][z_filter][:,0])  # [degrees]
-                    dec = 90 - 180/np.pi * np.arctan2(R[data_filter][z_filter], pos[data_filter][z_filter][:,2])  # [degrees]
-
-                    # add data to catalogue
-                    catalogue = file[f"{z_bins[i]}<z<{z_bins[i+1]}"]
-                    cat_pos = catalogue["Pos"]
-                    cat_dist = catalogue["ObsDist"]
-                    cat_spec_z = catalogue["SpecZ"]
-                    cat_obs_z = catalogue["ObsZ"]
-                    cat_mag = catalogue["ObsMagDust"]
-
-                    start_index = cat_pos.shape[0]
-                    total_galaxies = start_index + np.count_nonzero(z_filter)
-                    cat_pos.resize(total_galaxies, axis=0)
-                    cat_pos[start_index:] = np.transpose([ra, dec, r[data_filter][z_filter]])
-                    cat_dist.resize(total_galaxies, axis=0)
-                    cat_dist[start_index:] = obs_r
-                    cat_spec_z.resize(total_galaxies, axis=0)
-                    cat_spec_z[start_index:] = cosmo_z[z_filter]
-                    cat_obs_z.resize(total_galaxies, axis=0)
-                    cat_obs_z[start_index:] = obs_z[z_filter]
-                    cat_mag.resize(total_galaxies, axis=0)
-                    cat_mag[start_index:] = mag[data_filter][z_filter]
-
-
-def create_random_catalogue(size, data_catalogue, save_name):
-    with h5py.File(f"catalogues/{save_name}", "w") as file:
-        with h5py.File(f"catalogues/{data_catalogue}", "r") as data:
-            for z_bin in data:
-                random_catalogue = file.create_group(z_bin)
-                data_catalogue = data[f"{z_bin}"]
-
-                data_spec_z = np.array(data_catalogue["SpecZ"])
-                data_obs_z = np.array(data_catalogue["ObsZ"])
-                data_mag = np.array(data[f"{z_bin}"]["ObsMagDust"])
-
-                size = size if data_spec_z.shape[0] > 0 else 0
-                ra = np.random.default_rng().uniform(0 , 90, size)
-                dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(0, 1, size))
-                spec_z = np.random.default_rng().choice(data_spec_z, size)
-                obs_z = np.random.default_rng().choice(data_obs_z, size)
-                mag = np.random.default_rng().choice(data_mag, size) 
+                # calculate redshift space position by correcting for peculiar velocity
+                cosmo_z = z_at_comoving_distance(r[data_filter])
+                obs_z = observed_redshift(cosmo_z, v_r[data_filter]/c)
                 
-                random_catalogue.create_dataset("Pos", (size, 3), data=np.transpose([ra, dec, comoving_distance(spec_z)]), dtype="f8")
-                random_catalogue.create_dataset("ObsDist", (size,), data=comoving_distance(obs_z), dtype="f8")
-                random_catalogue.create_dataset("SpecZ", (size,), data=spec_z, dtype="f8")
-                random_catalogue.create_dataset("ObsZ", (size,), data=obs_z, dtype="f8")
-                random_catalogue.create_dataset("ObsMagDust", (size, 5), data=mag, dtype="f4")
+                # apply redshift bin filter
+                z_filter = (obs_z > z_lims[0]) & (obs_z < z_lims[1])
+                obs_r = comoving_distance(obs_z[z_filter])  # [cMpc/h]
+                ra = 180/np.pi * np.arctan2(pos[data_filter][z_filter][:,1], pos[data_filter][z_filter][:,0])  # [degrees]
+                dec = 90 - 180/np.pi * np.arctan2(R[data_filter][z_filter], pos[data_filter][z_filter][:,2])  # [degrees]
+
+                # add data to catalogue
+                start_index = cat_pos.shape[0]
+                total_galaxies = start_index + np.count_nonzero(z_filter)
+                cat_pos.resize(total_galaxies, axis=0)
+                cat_pos[start_index:] = np.transpose([ra, dec, r[data_filter][z_filter]])
+                cat_dist.resize(total_galaxies, axis=0)
+                cat_dist[start_index:] = obs_r
+                cat_spec_z.resize(total_galaxies, axis=0)
+                cat_spec_z[start_index:] = cosmo_z[z_filter]
+                cat_obs_z.resize(total_galaxies, axis=0)
+                cat_obs_z[start_index:] = obs_z[z_filter]
+                cat_mag.resize(total_galaxies, axis=0)
+                cat_mag[start_index:] = mag[data_filter][z_filter]
+                cat_mass.resize(total_galaxies, axis=0)
+                cat_mass[start_index:] = mass[data_filter][z_filter]
 
 
-def plot_catalogue(filename, save_name):
+def create_random_catalogue(multiplier, data_file, data_catalogue):
+    with h5py.File(f"catalogues/{data_file}", "r+") as file:
+        random_catalogue = file[data_catalogue].create_group("random")
+            
+        data_spec_z = np.array(file[data_catalogue]["SpecZ"])
+        data_obs_z = np.array(file[data_catalogue]["ObsZ"])
+
+        size = multiplier * data_spec_z.shape[0] if data_spec_z.shape[0] > 0 else 0
+        ra = np.random.default_rng().uniform(0 , 90, size)
+        dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(0, 1, size))
+        spec_z = np.random.default_rng().choice(data_spec_z, size)
+        obs_z = np.random.default_rng().choice(data_obs_z, size)
+        
+        random_catalogue.create_dataset("Pos", (size, 3), data=np.transpose([ra, dec, comoving_distance(spec_z)]), dtype="f8")
+        random_catalogue.create_dataset("ObsDist", (size,), data=comoving_distance(obs_z), dtype="f8")
+        random_catalogue.create_dataset("SpecZ", (size,), data=spec_z, dtype="f8")
+        random_catalogue.create_dataset("ObsZ", (size,), data=obs_z, dtype="f8")
+
+
+def plot_catalogue(filename, save_name):  # TODO: this is now broken, update this to allow a list of catalogues
     cat_pos = []
     cat_dist = []
     cat_mag = []
@@ -231,22 +225,3 @@ def plot_catalogue(filename, save_name):
     map.scatter(pos[:,0], pos[:,1], latlon=True, c=colour, cmap="spring", s=0.1, alpha=0.2, marker=".")
 
     fig.savefig(f"catalogues/{save_name}")
-
-
-if __name__ == "__main__":
-    start_time = datetime.now()
-    lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01/"
-    files = 155
-
-    print("Creating galaxy catalogue...")
-    create_data_catalogue(lightcone_dir, files, [0.2, 0.5], mag_lim=19.5, save_name="data_catalogue.hdf5")
-    print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
-
-    random_catalogue_size = 1000000
-    print(f"Creating random catalogue of size {random_catalogue_size}...")
-    create_random_catalogue(random_catalogue_size, "data_catalogue.hdf5", "random_catalogue.hdf5")
-    print(f"Random catalogue created, elapsed time: {datetime.now() - start_time}")
-
-    print("Plotting catalogue map...")
-    plot_catalogue("data_catalogue.hdf5", "data_catalogue_map.png")
-    print(f"Catalogue map plotted, elapsed time: {datetime.now() - start_time}")
