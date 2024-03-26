@@ -2,18 +2,12 @@ import numpy as np
 from datetime import datetime
 from catalogue import *
 
-if __name__ == "__main__":
-    start_time = datetime.now()
-    lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01"
-    files = 155
-    multiplier = 50  # how many times bigger should the random catalogue be
-    filename = "const_stellar_mass.hdf5"
 
+def create_catalogue(lightcone_dir, files, filename, multiplier):
     z_bins = [(0.8, 1.0), (0.6, 0.8), (0.4, 0.6), (0.2, 0.4), (0.0, 0.2)]
     mass_bins = [(11, np.inf), (10, 11), (9, 10)]
     flags = [9, 10, 15]
 
-    print("Creating constant stellar mass galaxy sample...")
     flag = 1
     for low_mass, high_mass in mass_bins:
         for low_z, high_z in z_bins:
@@ -29,4 +23,21 @@ if __name__ == "__main__":
             print(f"Number of galaxies in the range {low_mass}<m<{high_mass}, {low_z}<z<{high_z}: {number}")
             flag += 1
 
+
+if __name__ == "__main__":
+    files = 155
+    multiplier = 50  # how many times bigger should the random catalogue be
+
+    start_time = datetime.now()
+    lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01"
+    filename = "const_stellar_mass_A.hdf5"
+    print("Creating constant stellar mass galaxy sample for the A realisation...")
+    create_catalogue(lightcone_dir, files, filename, multiplier)
+    print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
+
+    start_time = datetime.now()
+    lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-B/SAM/galaxies_lightcone_01"
+    filename = "const_stellar_mass_B.hdf5"
+    print("Creating constant stellar mass galaxy sample for the B realisation...")
+    create_catalogue(lightcone_dir, files, filename, multiplier)
     print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
