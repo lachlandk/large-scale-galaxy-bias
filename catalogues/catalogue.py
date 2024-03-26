@@ -57,7 +57,7 @@ def cosmological_redshift(obs_z, v_r):
     return (1 + obs_z)/(1 + v_r/c) - 1  # correct to linear order
 
 
-def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, np.inf), mag_lims=(-np.inf, 19.5), mass_lims=(-np.inf, np.inf)):
+def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, np.inf), mag_lims=(-np.inf, 19.5), mass_lims=(-np.inf, np.inf), dec_lims=(0, 90), ra_lims=(0, 90)):
     with h5py.File(f"catalogues/{save_file}", "a") as file:
         catalogue = file.create_group(save_catalogue)
         cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
@@ -80,6 +80,8 @@ def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, np.inf
                 # calculate positions in spherical coordinates
                 R = np.sqrt(pos[:,0]**2 + pos[:,1]**2)  # [cMpc/h]
                 r = np.sqrt(R**2 + pos[:,2]**2)  # [cMpc/h]
+                ra = 180/np.pi * np.arctan2(pos[:,1], pos[:,0])  # [degrees]
+                dec = 90 - 180/np.pi * np.arctan2(R, pos[:,2])  # [degrees]
 
                 # calculate radial peculiar velocity
                 v_r = (vel[:,0]*pos[:,0] + vel[:,1]*pos[:,1] + vel[:,2]*pos[:,2]) / r  # [km/s]
@@ -91,7 +93,9 @@ def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, np.inf
                 approx_dist_filter = (r > lower_dist_bound) & (r < upper_dist_bound)
                 mag_filter = (mag[:,2] > mag_lims[0]) & (mag[:,2] < mag_lims[1])  # magnitude limit in r band
                 mass_filter = (mass > mass_lims[0]) & (mass < mass_lims[1])  # mass limits in log10 M_sol
-                data_filter = approx_dist_filter & mag_filter & mass_filter
+                dec_filter = (dec > dec_lims[0]) & (dec < dec_lims[1])
+                ra_filter = (ra > ra_lims[0]) & (ra < ra_lims[1])
+                data_filter = approx_dist_filter & mag_filter & mass_filter & dec_filter & ra_filter
 
                 # calculate redshift space position by correcting for peculiar velocity
                 cosmo_z = z_at_comoving_distance(r[data_filter])
@@ -100,14 +104,12 @@ def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, np.inf
                 # apply redshift bin filter
                 z_filter = (obs_z > z_lims[0]) & (obs_z < z_lims[1])
                 obs_r = comoving_distance(obs_z[z_filter])  # [cMpc/h]
-                ra = 180/np.pi * np.arctan2(pos[data_filter][z_filter][:,1], pos[data_filter][z_filter][:,0])  # [degrees]
-                dec = 90 - 180/np.pi * np.arctan2(R[data_filter][z_filter], pos[data_filter][z_filter][:,2])  # [degrees]
 
                 # add data to catalogue
                 start_index = cat_pos.shape[0]
                 total_galaxies = start_index + np.count_nonzero(z_filter)
                 cat_pos.resize(total_galaxies, axis=0)
-                cat_pos[start_index:] = np.transpose([ra, dec, r[data_filter][z_filter]])
+                cat_pos[start_index:] = np.transpose([ra[data_filter][z_filter], dec[data_filter][z_filter], r[data_filter][z_filter]])
                 cat_dist.resize(total_galaxies, axis=0)
                 cat_dist[start_index:] = obs_r
                 cat_spec_z.resize(total_galaxies, axis=0)
@@ -118,6 +120,7 @@ def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, np.inf
                 cat_mag[start_index:] = mag[data_filter][z_filter]
                 cat_mass.resize(total_galaxies, axis=0)
                 cat_mass[start_index:] = mass[data_filter][z_filter]
+    return total_galaxies
 
 
 def create_random_catalogue(multiplier, data_file, data_catalogue):
