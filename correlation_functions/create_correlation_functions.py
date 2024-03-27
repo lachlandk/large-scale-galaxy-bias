@@ -3,51 +3,68 @@ import matplotlib.pyplot as plt
 from correlation_function import *
 
 if __name__ == "__main__":
-    mag_limits = [19, 20, 21]
-    mass_limits = [9.5, 10, 10.5, 11]
-    mag_limit_cfs = []
-    mass_limit_cfs = []
-    s = np.linspace(0.1, 300, 201)
+    s_bins = np.geomspace(0.1, 200, 100)
 
-    for lim in mag_limits:
-        print(f"Calculating correlation function for catalogue with magnitude limit {lim}...")
-        data_catalogue = f"data_catalogue_r={lim}_m=0_z=0.2-0.5_A_full.hdf5"
-        save_name = f"correlation_function_r={lim}_m=0_z=0.2-0.5_nmu_bins=1.hdf5"
-        xi = correlation_function(data_catalogue, "random_catalogue_20_000_000.hdf5", s, 1, 1, save_name=save_name)
-        mag_limit_cfs.append(xi)
+    # print(f"Calculating correlation functions for constant number density sample...")
+    # z_bins = [(0.4, 0.5), (0.3, 0.4), (0.2, 0.3), (0.1, 0.2), (0.0, 0.1)]
+    # for low_z, high_z in z_bins:
+    #     print(f"Starting on bin {low_z}<z<{high_z}...")
+    #     xi_A = correlation_function("const_number_density_A.hdf5", f"{low_z}<z<{high_z}", s_bins)
+    #     xi_B = correlation_function("const_number_density_B.hdf5", f"{low_z}<z<{high_z}", s_bins)
+    #     xi = [(xi_A_bin + xi_B_bin) / 2 for xi_A_bin, xi_B_bin in zip(xi_A, xi_B)]
 
-    nmu_bins = 100
-    for lim in mass_limits:
-        print(f"Calculating correlation function for catalogue with mass limit {lim}...")
-        data_catalogue = f"data_catalogue_r=19.5_m={lim}_z=0.2-0.5_A_full.hdf5"
-        save_name = f"correlation_function_r={lim}_m=0_z=0.2-0.5_nmu_bins={nmu_bins}.hdf5"
-        xi = correlation_function(data_catalogue, "random_catalogue_20_000_000.hdf5", s, 1, nmu_bins, save_name=save_name)
-        mass_limit_cfs.append(xi)
+    #     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    #     fig.suptitle(f"Correlation Function in Real Space {low_z}<z<{high_z}")
 
-    # plot correlation function for mag limited catalogues
-    fig, ax = plt.subplots(1, 1)
+    #     ax.plot(s_bins[:-1], xi[0])
+    #     ax.set_xlabel("$r$ [cMpc]")
+    #     ax.set_ylabel("$\\xi(r)$")
+    #     ax.set_xscale("log")
+    #     ax.set_yscale("log")
 
-    ax.plot(s[:-1], xi)
-    ax.set_xlabel("s [cMpc/h]")
-    ax.set_ylabel("$\\xi$")
-    # ax.set_ylim(0, 150)
-    # ax.set_xlim(0, 300)
+    #     fig.savefig(f"correlation_functions/corrfunc_const_number_density_{low_z}_z_{high_z}.png")
 
-    fig.savefig("correlation_functions/mag_limited.png")
+    print(f"Calculating correlation functions for constant stellar mass sample...")
+    z_bins = [(0.8, 1.0), (0.6, 0.8), (0.4, 0.6), (0.2, 0.4), (0.0, 0.2)]
+    mass_bins = [(11, np.inf), (10, 11), (9, 10)]
+    for low_mass, high_mass in mass_bins:
+        for low_z, high_z in z_bins:
+            print(f"Starting on bin {low_mass}<m<{high_mass}/{low_z}<z<{high_z}...")
+            xi_A = correlation_function("const_stellar_mass_A.hdf5", f"{low_mass}<m<{high_mass}/{low_z}<z<{high_z}", s_bins)
+            xi_B = correlation_function("const_stellar_mass_B.hdf5", f"{low_mass}<m<{high_mass}/{low_z}<z<{high_z}", s_bins)
+            xi = [(xi_A_bin + xi_B_bin) / 2 for xi_A_bin, xi_B_bin in zip(xi_A, xi_B)]
 
-    # plot multipole moments of correlation function for mass limited catalogues
-    fig, ax = plt.subplots(1, 1)
+            fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+            fig.suptitle(f"Correlation Function in Real Space {low_mass}<m<{high_mass}, {low_z}<z<{high_z}")
 
-    ax.plot(s[:-1], xi_0, label="Monopole")
-    ax.plot(s[:-1], xi_1, label="Dipole")
-    ax.plot(s[:-1], xi_2, label="Quadrupole")
-    ax.plot(s[:-1], xi_3, label="Octupole")
-    ax.plot(s[:-1], xi_4, label="Hexadecapole")
-    ax2.set_xlabel("s [cMpc/h]")
-    ax2.set_ylabel("Multipole moments of $\\xi$")
-    # ax.set_ylim(-100, 300)
-    # ax.set_xlim(0, 300)
-    # ax2.set_xscale("log")
-    ax2.legend()
+            ax.plot(s_bins[:-1], xi[0])
+            ax.set_xlabel("$r$ [cMpc]")
+            ax.set_ylabel("$\\xi(r)$")
+            
+            try:
+                ax.set_xscale("log")
+                ax.set_yscale("log")
+                fig.savefig(f"correlation_functions/corrfunc_const_stellar_mass_{low_mass}_m_{high_mass}_{low_z}_z_{high_z}.png")
+            except ValueError:
+                ax.set_xscale("linear")
+                ax.set_yscale("linear")
+                fig.savefig(f"correlation_functions/corrfunc_const_stellar_mass_{low_mass}_m_{high_mass}_{low_z}_z_{high_z}.png")
 
-    fig.savefig("correlation_functions/mass_limited.png")
+    print(f"Calculating correlation functions for magnitude limited sample...")
+    z_bins = [(0.8, 1.0), (0.6, 0.8), (0.4, 0.6), (0.2, 0.4), (0.0, 0.2)]
+    for low_z, high_z in z_bins:
+        print(f"Starting on bin {low_z}<z<{high_z}...")
+        xi_A = correlation_function("magnitude_limited_A.hdf5", f"{low_z}<z<{high_z}", s_bins)
+        xi_B = correlation_function("magnitude_limited_B.hdf5", f"{low_z}<z<{high_z}", s_bins)
+        xi = [(xi_A_bin + xi_B_bin) / 2 for xi_A_bin, xi_B_bin in zip(xi_A, xi_B)]
+
+        fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+        fig.suptitle(f"Correlation Function in Real Space {low_z}<z<{high_z}")
+
+        ax.plot(s_bins[:-1], xi[0])
+        ax.set_xlabel("$r$ [cMpc]")
+        ax.set_ylabel("$\\xi(r)$")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+
+        fig.savefig(f"correlation_functions/corrfunc_magnitude_limited_{low_z}_z_{high_z}.png")
