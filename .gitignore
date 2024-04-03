@@ -2,5 +2,9 @@
 /.venv
 **/__pycache__
 
-# Data Files
+# Data files
 *.hdf5
+
+# LaTeX files
+*.synctex.gz
+*.bbl
