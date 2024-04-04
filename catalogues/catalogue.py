@@ -1,6 +1,7 @@
 import h5py
 import numpy as np
 from tqdm import trange
+from datetime import datetime
 from scipy import optimize, interpolate
 import matplotlib.pyplot as plt
 import mpl_toolkits.axisartist.angle_helper as angle_helper
@@ -57,21 +58,21 @@ def cosmological_redshift(obs_z, v_r):
     return (1 + obs_z)/(1 + v_r/c) - 1  # correct to linear order
 
 
-def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, np.inf), mag_lims=(-np.inf, 19.5), mass_lims=(-np.inf, np.inf), dec_lims=(0, 90), ra_lims=(0, 90)):
+def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, 1.5), mag_lims=(-np.inf, 19.5), mass_lims=(-np.inf, np.inf), dec_lims=(0, 90), ra_lims=(0, 90)):
     with h5py.File(f"catalogues/{save_file}", "a") as file:
         catalogue = file.create_group(save_catalogue)
         cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
         cat_dist = catalogue.create_dataset("ObsDist", (0,), maxshape=(None,), dtype="f8")
         cat_spec_z = catalogue.create_dataset("SpecZ", (0,), maxshape=(None,), dtype="f8")
         cat_obs_z = catalogue.create_dataset("ObsZ", (0,), maxshape=(None,), dtype="f8")
-        cat_mag = catalogue.create_dataset("ObsMagDust", (0, 5), maxshape=(None, 5), dtype="f4")
+        cat_mag = catalogue.create_dataset("ObsMag", (0, 5), maxshape=(None, 5), dtype="f4")
         cat_mass = catalogue.create_dataset("StellarMass", (0,), maxshape=(None,), dtype="f4")
 
         # generate catalogues from data
         for index in trange(num_files):
             with h5py.File(f"{dir}/gal_cone_01.{index}.hdf5", "r") as data:
                 galaxies = data["Galaxies"]
-                mag = np.array(galaxies["ObsMagDust"])  # u g r i z, magnitude with k-correction and corrected for dust extinction
+                mag = np.array(galaxies["ObsMag"])  # u g r i z, magnitude with k-correction and corrected for dust extinction
                 mass = np.log10(1e10 * np.array(galaxies["StellarMass"])) # [log_10(M_sol/h)]
 
                 pos = np.array(galaxies["Pos"])  # [cMpc/h]
@@ -142,19 +143,19 @@ def create_random_catalogue(multiplier, data_file, data_catalogue):
         random_catalogue.create_dataset("ObsZ", (size,), data=obs_z, dtype="f8")
 
 
-def plot_catalogue(filename, save_name):  # TODO: this is now broken, update this to allow a list of catalogues
+def plot_catalogue(filename):
     cat_pos = []
     cat_dist = []
     cat_mag = []
-    with h5py.File(f"catalogues/{filename}", "r") as catalogue:
-        for z_bin in catalogue:
-            cat_pos.append(np.array(catalogue[z_bin]["Pos"]))
-            cat_dist.append(np.array(catalogue[z_bin]["ObsDist"]))
-            cat_mag.append(np.array(catalogue[z_bin]["ObsMagDust"]))
+    with h5py.File(f"catalogues/{filename}", "r") as data_file:
+        for catalogue in data_file:
+            cat_pos.append(np.array(data_file[catalogue]["Pos"]))
+            cat_dist.append(np.array(data_file[catalogue]["ObsDist"]))
+            cat_mag.append(np.array(data_file[catalogue]["ObsMag"]))
     pos = np.concatenate(cat_pos)
     dist = np.concatenate(cat_dist)
     mag = np.concatenate(cat_mag)
-    colour = mag[:,1] - mag[:,2]
+    colour = np.clip(mag[:,1] - mag[:,2], 0.5, 1.5)
 
     fig = plt.figure(figsize=(50, 50))
     fig.set_layout_engine("constrained")
@@ -203,8 +204,8 @@ def plot_catalogue(filename, save_name):  # TODO: this is now broken, update thi
     aux_ax2 = ax2.get_aux_axes(transform)
     aux_ax2.patch = ax2.patch
     ax2.patch.zorder = 0
-    aux_ax1.scatter(pos[:,0], pos[:,2], c=colour, cmap="spring", s=0.01, marker=".")
-    scatter = aux_ax2.scatter(pos[:,0], dist, c=colour, cmap="spring", s=0.01, marker=".")
+    aux_ax1.scatter(pos[:,0], pos[:,2], c=colour, cmap="bwr", s=0.01, marker=".")
+    scatter = aux_ax2.scatter(pos[:,0], dist, c=colour, cmap="bwr", s=0.01, marker=".")
 
     # colourbar
     colourbar = fig.colorbar(scatter, ax=ax2)
@@ -225,6 +226,18 @@ def plot_catalogue(filename, save_name):  # TODO: this is now broken, update thi
     ax3.annotate("Declination [deg]", map(78, 44), size=30, rotation=-57, color="white")
     map.drawmapboundary(fill_color="black")
 
-    map.scatter(pos[:,0], pos[:,1], latlon=True, c=colour, cmap="spring", s=0.1, alpha=0.2, marker=".")
+    map.scatter(pos[:,0], pos[:,1], latlon=True, c=colour, cmap="bwr", s=0.1, alpha=0.2, marker=".")
 
-    fig.savefig(f"catalogues/{save_name}")
+    fig.savefig(f"catalogues/{filename.split('.')[0]}.png")
+
+
+if __name__ == "__main__":
+    lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01"
+    files = 155
+
+    start_time = datetime.now()
+    print("Creating magnitude limited sample for mapping...")  
+    total_galaxies = select_galaxies(lightcone_dir, files, "map_0_z_1.hdf5", "map", z_lims=(0, 1))
+    print(f"Galaxies in catalogue: {total_galaxies}")
+    plot_catalogue("map_0_z_1.hdf5")
+    print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")    
