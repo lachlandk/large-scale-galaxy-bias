@@ -63,7 +63,7 @@ def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, 1.5), 
         catalogue = file.create_group(save_catalogue)
         cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
         cat_dist = catalogue.create_dataset("ObsDist", (0,), maxshape=(None,), dtype="f8")
-        cat_spec_z = catalogue.create_dataset("SpecZ", (0,), maxshape=(None,), dtype="f8")
+        cat_cos_z = catalogue.create_dataset("CosZ", (0,), maxshape=(None,), dtype="f8")
         cat_obs_z = catalogue.create_dataset("ObsZ", (0,), maxshape=(None,), dtype="f8")
         cat_mag = catalogue.create_dataset("ObsMag", (0, 5), maxshape=(None, 5), dtype="f4")
         cat_mass = catalogue.create_dataset("StellarMass", (0,), maxshape=(None,), dtype="f4")
@@ -113,8 +113,8 @@ def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, 1.5), 
                 cat_pos[start_index:] = np.transpose([ra[data_filter][z_filter], dec[data_filter][z_filter], r[data_filter][z_filter]])
                 cat_dist.resize(total_galaxies, axis=0)
                 cat_dist[start_index:] = obs_r
-                cat_spec_z.resize(total_galaxies, axis=0)
-                cat_spec_z[start_index:] = cosmo_z[z_filter]
+                cat_cos_z.resize(total_galaxies, axis=0)
+                cat_cos_z[start_index:] = cosmo_z[z_filter]
                 cat_obs_z.resize(total_galaxies, axis=0)
                 cat_obs_z[start_index:] = obs_z[z_filter]
                 cat_mag.resize(total_galaxies, axis=0)
@@ -128,18 +128,18 @@ def create_random_catalogue(multiplier, data_file, data_catalogue):
     with h5py.File(f"catalogues/{data_file}", "r+") as file:
         random_catalogue = file[data_catalogue].create_group("random")
             
-        data_spec_z = np.array(file[data_catalogue]["SpecZ"])
+        data_cos_z = np.array(file[data_catalogue]["CosZ"])
         data_obs_z = np.array(file[data_catalogue]["ObsZ"])
 
-        size = multiplier * data_spec_z.shape[0] if data_spec_z.shape[0] > 0 else 0
+        size = multiplier * data_cos_z.shape[0] if data_cos_z.shape[0] > 0 else 0
         ra = np.random.default_rng().uniform(0 , 90, size)
         dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(0, 1, size))
-        spec_z = np.random.default_rng().choice(data_spec_z, size)
+        cos_z = np.random.default_rng().choice(data_cos_z, size)
         obs_z = np.random.default_rng().choice(data_obs_z, size)
         
-        random_catalogue.create_dataset("Pos", (size, 3), data=np.transpose([ra, dec, comoving_distance(spec_z)]), dtype="f8")
+        random_catalogue.create_dataset("Pos", (size, 3), data=np.transpose([ra, dec, comoving_distance(cos_z)]), dtype="f8")
         random_catalogue.create_dataset("ObsDist", (size,), data=comoving_distance(obs_z), dtype="f8")
-        random_catalogue.create_dataset("SpecZ", (size,), data=spec_z, dtype="f8")
+        random_catalogue.create_dataset("CosZ", (size,), data=cos_z, dtype="f8")
         random_catalogue.create_dataset("ObsZ", (size,), data=obs_z, dtype="f8")
 
 

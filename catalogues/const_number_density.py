@@ -29,8 +29,8 @@ def create_catalogue(lightcone_dir, files, filename, multiplier):
             catalogue["Pos"].resize(number, axis=0)
             catalogue["ObsDist"][:number] = catalogue["ObsDist"][selected]
             catalogue["ObsDist"].resize(number, axis=0)
-            catalogue["SpecZ"][:number] = catalogue["SpecZ"][selected]
-            catalogue["SpecZ"].resize(number, axis=0)
+            catalogue["CosZ"][:number] = catalogue["CosZ"][selected]
+            catalogue["CosZ"].resize(number, axis=0)
             catalogue["ObsZ"][:number] = catalogue["ObsZ"][selected]
             catalogue["ObsZ"].resize(number, axis=0)
             catalogue["ObsMag"][:number] = catalogue["ObsMag"][selected]
