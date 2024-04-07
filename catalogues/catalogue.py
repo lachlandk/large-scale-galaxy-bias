@@ -100,7 +100,7 @@ def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, 1.5), 
 
                 # calculate redshift space position by correcting for peculiar velocity
                 cosmo_z = z_at_comoving_distance(r[data_filter])
-                obs_z = observed_redshift(cosmo_z, v_r[data_filter]/c)
+                obs_z = observed_redshift(cosmo_z, v_r[data_filter])
                 
                 # apply redshift bin filter
                 z_filter = (obs_z > z_lims[0]) & (obs_z < z_lims[1])
@@ -155,7 +155,7 @@ def plot_catalogue(filename):
     pos = np.concatenate(cat_pos)
     dist = np.concatenate(cat_dist)
     mag = np.concatenate(cat_mag)
-    colour = np.clip(mag[:,1] - mag[:,2], 0.5, 1.5)
+    colour = np.clip(mag[:,1] - mag[:,2], 0.5, 1.2)
 
     fig = plt.figure(figsize=(50, 50))
     fig.set_layout_engine("constrained")
@@ -237,7 +237,7 @@ if __name__ == "__main__":
 
     start_time = datetime.now()
     print("Creating magnitude limited sample for mapping...")  
-    total_galaxies = select_galaxies(lightcone_dir, files, "map_0_z_1.hdf5", "map", z_lims=(0, 1))
+    total_galaxies = select_galaxies(lightcone_dir, files, "map_0_z_1.hdf5", "map", z_lims=(0, 0.5))
     print(f"Galaxies in catalogue: {total_galaxies}")
     plot_catalogue("map_0_z_1.hdf5")
     print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")    
