@@ -142,8 +142,8 @@ def create_random_catalogue(multiplier, data_file, data_catalogue):
             
         data_cos_z = np.array(file[data_catalogue]["CosZ"])
         data_obs_z = np.array(file[data_catalogue]["ObsZ"])
-        ra_lims = data_catalogue.attrs["ra_lims"]
-        dec_lims = data_catalogue.attrs["dec_lims"]
+        ra_lims = file[data_catalogue].attrs["ra_lims"]
+        dec_lims = file[data_catalogue].attrs["dec_lims"]
 
         size = multiplier * data_cos_z.shape[0] if data_cos_z.shape[0] > 0 else 0
         ra = np.random.default_rng().uniform(ra_lims[0], ra_lims[1], size)
