@@ -21,6 +21,8 @@ plt.rcParams["ytick.labelsize"] = 30
 c = 3e5  # km/s
 Omega_m_0 = 0.3089
 Omega_Lambda_0 = 0.6911
+H_0 = 67.74  # km/s/Mpc
+h = H_0/100
 
 # cosmological functions
 # create interpolating function for comoving distance
@@ -29,8 +31,8 @@ interp_points_r = np.ndarray(num_interp_points)
 interp_points_z = np.linspace(0, 1.5, num_interp_points)
 for i in range(num_interp_points):
     integration_range = np.linspace(0, interp_points_z[i], 100)
-    interp_points_r[i] = np.trapz(c / (100*np.sqrt(Omega_m_0 * (1 + integration_range)**3 + Omega_Lambda_0)), integration_range)  # [cMpc/h]
-comoving_distance_interp = interpolate.CubicSpline(interp_points_z, interp_points_r, extrapolate=False)  # [cMpc/h]
+    interp_points_r[i] = np.trapz(c / (H_0*np.sqrt(Omega_m_0 * (1 + integration_range)**3 + Omega_Lambda_0)), integration_range)  # [cMpc]
+comoving_distance_interp = interpolate.CubicSpline(interp_points_z, interp_points_r, extrapolate=False)  # [cMpc]
 
 
 def comoving_distance(z):
@@ -73,14 +75,14 @@ def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, 1.5), 
             with h5py.File(f"{dir}/gal_cone_01.{index}.hdf5", "r") as data:
                 galaxies = data["Galaxies"]
                 mag = np.array(galaxies["ObsMag"])  # u g r i z, magnitude with k-correction and corrected for dust extinction
-                mass = np.log10(1e10 * np.array(galaxies["StellarMass"])) # [log_10(M_sol/h)]
+                mass = np.log10(1e10 * np.array(galaxies["StellarMass"])) - np.log10(h) # [log_10(M_sol)]
 
-                pos = np.array(galaxies["Pos"])  # [cMpc/h]
+                pos = np.array(galaxies["Pos"])/h  # [cMpc]
                 vel = np.array(galaxies["Vel"])  # [km/s]
 
                 # calculate positions in spherical coordinates
-                R = np.sqrt(pos[:,0]**2 + pos[:,1]**2)  # [cMpc/h]
-                r = np.sqrt(R**2 + pos[:,2]**2)  # [cMpc/h]
+                R = np.sqrt(pos[:,0]**2 + pos[:,1]**2)  # [cMpc]
+                r = np.sqrt(R**2 + pos[:,2]**2)  # [cMpc]
                 ra = 180/np.pi * np.arctan2(pos[:,1], pos[:,0])  # [degrees]
                 dec = 90 - 180/np.pi * np.arctan2(R, pos[:,2])  # [degrees]
 
@@ -93,7 +95,7 @@ def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, 1.5), 
 
                 approx_dist_filter = (r > lower_dist_bound) & (r < upper_dist_bound)
                 mag_filter = (mag[:,2] > mag_lims[0]) & (mag[:,2] < mag_lims[1])  # magnitude limit in r band
-                mass_filter = (mass > mass_lims[0]) & (mass < mass_lims[1])  # mass limits in log10 M_sol
+                mass_filter = (mass > mass_lims[0]) & (mass < mass_lims[1])  # mass limits in log10(M_sol)
                 dec_filter = (dec > dec_lims[0]) & (dec < dec_lims[1])
                 ra_filter = (ra > ra_lims[0]) & (ra < ra_lims[1])
                 data_filter = approx_dist_filter & mag_filter & mass_filter & dec_filter & ra_filter
@@ -104,7 +106,7 @@ def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, 1.5), 
                 
                 # apply redshift bin filter
                 z_filter = (obs_z > z_lims[0]) & (obs_z < z_lims[1])
-                obs_r = comoving_distance(obs_z[z_filter])  # [cMpc/h]
+                obs_r = comoving_distance(obs_z[z_filter])  # [cMpc]
 
                 # add data to catalogue
                 start_index = cat_pos.shape[0]
@@ -121,7 +123,17 @@ def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, 1.5), 
                 cat_mag[start_index:] = mag[data_filter][z_filter]
                 cat_mass.resize(total_galaxies, axis=0)
                 cat_mass[start_index:] = mass[data_filter][z_filter]
-    return total_galaxies
+
+        r_lims = (comoving_distance(z_lims[0]), comoving_distance(z_lims[1]))
+        volume = np.pi/6 * (r_lims[1]**3 - r_lims[0]**3)
+        median_z = np.median(cat_cos_z)
+        catalogue.attrs["r_lims"] = r_lims
+        catalogue.attrs["ra_lims"] = ra_lims
+        catalogue.attrs["dec_lims"] = dec_lims
+        catalogue.attrs["median_z_cos"] = median_z
+        catalogue.attrs["total_galaxies"] = total_galaxies
+        catalogue.attrs["number_density"] = total_galaxies / volume
+    return total_galaxies, total_galaxies / volume, median_z
 
 
 def create_random_catalogue(multiplier, data_file, data_catalogue):
@@ -130,10 +142,12 @@ def create_random_catalogue(multiplier, data_file, data_catalogue):
             
         data_cos_z = np.array(file[data_catalogue]["CosZ"])
         data_obs_z = np.array(file[data_catalogue]["ObsZ"])
+        ra_lims = data_catalogue.attrs["ra_lims"]
+        dec_lims = data_catalogue.attrs["dec_lims"]
 
         size = multiplier * data_cos_z.shape[0] if data_cos_z.shape[0] > 0 else 0
-        ra = np.random.default_rng().uniform(0 , 90, size)
-        dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(0, 1, size))
+        ra = np.random.default_rng().uniform(ra_lims[0], ra_lims[1], size)
+        dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(np.cos(dec_lims[1]), np.cos(dec_lims[0]), size))
         cos_z = np.random.default_rng().choice(data_cos_z, size)
         obs_z = np.random.default_rng().choice(data_obs_z, size)
         
