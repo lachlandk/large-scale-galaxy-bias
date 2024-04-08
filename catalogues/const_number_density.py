@@ -13,7 +13,7 @@ def create_catalogue(lightcone_dir, files, filename, multiplier):
     print(f"Median cosmological redshift: {median_z}")
 
     # collect samples in other bins and cut them down to size
-    z_bins = [(0.4, 0.45), (0.35, 0.4), (0.3, 0.35) (0.25, 0.3), (0.2, 0.25), (0.15, 0.2), (0.1, 0.15), (0.05, 0.1), (0.0, 0.05)]
+    z_bins = [(0.4, 0.45), (0.35, 0.4), (0.3, 0.35), (0.25, 0.3), (0.2, 0.25), (0.15, 0.2), (0.1, 0.15), (0.05, 0.1), (0.0, 0.05)]
     for low_z, high_z in z_bins: 
         total_galaxies, number_density, median_z = select_galaxies(lightcone_dir, files, filename, f"{low_z}<z<{high_z}", z_lims=(low_z, high_z), mass_lims=(11, np.inf))
         with h5py.File(f"catalogues/{filename}", "r+") as file:
