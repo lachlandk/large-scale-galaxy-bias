@@ -5,41 +5,39 @@ from catalogue import *
 
 
 def create_catalogue(lightcone_dir, files, filename, multiplier):
-    select_galaxies(lightcone_dir, files, filename, "0.45<z<0.5", z_lims=(0.45, 0.5), mass_lims=(11, np.inf))
+    # calculate number density from largest redshift bin
+    total_galaxies, fixed_number_density, median_z = select_galaxies(lightcone_dir, files, filename, "0.45<z<0.5", z_lims=(0.45, 0.5), mass_lims=(11, np.inf))
     create_random_catalogue(multiplier, filename, "0.45<z<0.5")
-
-    # calculate number density
-    with h5py.File(f"catalogues/{filename}", "r") as file:
-        volume = np.pi/6 * (comoving_distance(0.5)**3 - comoving_distance(0.45)**3)
-        number = file["0.45<z<0.5"]["Pos"].shape[0]
-        number_density = number/volume
-    print(f"Number of galaxies in the range 0.45<z<0.5: {number}")
-    print(f"Galaxy number density: {number_density}/Mpc^3")
+    print(f"Number of galaxies in the range 0.45<z<0.5: {total_galaxies}")
+    print(f"Galaxy number density: {fixed_number_density}/Mpc^3")
+    print(f"Median cosmological redshift: {median_z}")
 
     # collect samples in other bins and cut them down to size
-    z_bins = [(0.4, 0.45), (0.35, 0.4), (0.3, 0.35) (0.25, 0.3), (0.2, 0.25), (0.15, 0.2), (0.1, 0.15), (0.05, 0.1), (0, 0.05)]
+    z_bins = [(0.4, 0.45), (0.35, 0.4), (0.3, 0.35) (0.25, 0.3), (0.2, 0.25), (0.15, 0.2), (0.1, 0.15), (0.05, 0.1), (0.0, 0.05)]
     for low_z, high_z in z_bins: 
-        select_galaxies(lightcone_dir, files, filename, f"{low_z}<z<{high_z}", z_lims=(low_z, high_z), mass_lims=(11, np.inf))
-        volume = np.pi/6 * (comoving_distance(high_z)**3 - comoving_distance(low_z)**3)
-        number = np.round(number_density * volume).astype("int")
+        total_galaxies, number_density, median_z = select_galaxies(lightcone_dir, files, filename, f"{low_z}<z<{high_z}", z_lims=(low_z, high_z), mass_lims=(11, np.inf))
         with h5py.File(f"catalogues/{filename}", "r+") as file:
             catalogue = file[f"{low_z}<z<{high_z}"]
-            selected = np.sort(np.argsort(catalogue["StellarMass"])[:number])
-            catalogue["Pos"][:number] = catalogue["Pos"][selected]
-            catalogue["Pos"].resize(number, axis=0)
-            catalogue["ObsDist"][:number] = catalogue["ObsDist"][selected]
-            catalogue["ObsDist"].resize(number, axis=0)
-            catalogue["CosZ"][:number] = catalogue["CosZ"][selected]
-            catalogue["CosZ"].resize(number, axis=0)
-            catalogue["ObsZ"][:number] = catalogue["ObsZ"][selected]
-            catalogue["ObsZ"].resize(number, axis=0)
-            catalogue["ObsMag"][:number] = catalogue["ObsMag"][selected]
-            catalogue["ObsMag"].resize(number, axis=0)
-            catalogue["StellarMass"][:number] = catalogue["StellarMass"][selected]
-            catalogue["StellarMass"].resize(number, axis=0)
+            volume = total_galaxies / number_density
+            limit_number = np.round(fixed_number_density * volume).astype("int")
+            selected = np.sort(np.argsort(catalogue["StellarMass"])[:limit_number])
+            catalogue["Pos"][:limit_number] = catalogue["Pos"][selected]
+            catalogue["Pos"].resize(limit_number, axis=0)
+            catalogue["ObsDist"][:limit_number] = catalogue["ObsDist"][selected]
+            catalogue["ObsDist"].resize(limit_number, axis=0)
+            catalogue["CosZ"][:limit_number] = catalogue["CosZ"][selected]
+            catalogue["CosZ"].resize(limit_number, axis=0)
+            catalogue["ObsZ"][:limit_number] = catalogue["ObsZ"][selected]
+            catalogue["ObsZ"].resize(limit_number, axis=0)
+            catalogue["ObsMag"][:limit_number] = catalogue["ObsMag"][selected]
+            catalogue["ObsMag"].resize(limit_number, axis=0)
+            catalogue["StellarMass"][:limit_number] = catalogue["StellarMass"][selected]
+            catalogue["StellarMass"].resize(limit_number, axis=0)
         
         create_random_catalogue(multiplier, filename, f"{low_z}<z<{high_z}")
-        print(f"Number of galaxies in the range {low_z}<z<{high_z}: {number}")
+        print(f"Number of galaxies in the range {low_z}<z<{high_z}: {limit_number}")
+        print(f"Galaxy number density: {limit_number / volume}/Mpc^3")
+        print(f"Median cosmological redshift: {median_z}")
 
 
 if __name__ == "__main__":
