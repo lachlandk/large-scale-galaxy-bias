@@ -14,6 +14,7 @@ def correlation_function(data_file, catalogue, s_bins):
         if f"{catalogue}/xi_0" in save_file:
             xi = np.array(save_file[catalogue]["xi_0"])
             sigma = np.array(save_file[catalogue]["sigma"])
+            median_z = save_file[catalogue].attrs["median_z_cos"]
             print(f"Correlation function loaded, elapsed time: {datetime.now() - start_time}")
         else:
             with h5py.File(f"catalogues/{data_file}", "r") as sample:
@@ -25,7 +26,7 @@ def correlation_function(data_file, catalogue, s_bins):
                 r_ra = r_pos[:,0]
                 r_dec = r_pos[:,1]
                 r_dist = r_pos[:,2]
-                median_z = sample[catalogue].attrs["median_z"]
+                median_z = sample[catalogue].attrs["median_z_cos"]
 
             # count data pairs
             print(f"Counting data pairs, sample size: {d_pos.shape[0]}...")
@@ -75,7 +76,7 @@ def correlation_function(data_file, catalogue, s_bins):
                     mu = DR_pairs_struct["mumax"][0:nmu_bins]
                 save_file[catalogue].create_dataset("DR", data=DR_pairs)
                 save_file[catalogue].attrs["mu"] = mu
-                save_file[catalogue].attrs["median_z"] = median_z
+                save_file[catalogue].attrs["median_z_cos"] = median_z
             print(f"Data-random pairs counted, elapsed time: {datetime.now() - start_time}")
             print(f"Median (cosmological) redshift in bin: {median_z}")
 
@@ -96,16 +97,17 @@ def correlation_function(data_file, catalogue, s_bins):
             save_file[catalogue].create_dataset("sigma", data=sigma)
             print(f"Correction function calculated, elapsed time: {datetime.now() - start_time}")
 
-    return xi, sigma
+    return xi, sigma, median_z
 
 
 if __name__ == "__main__":
     s = np.linspace(0.1, 100, 101)
 
-    xi_A, sigma_A = correlation_function("magnitude_limited_A.hdf5", "0.0<z<0.2", s)
-    xi_B, sigma_B = correlation_function("magnitude_limited_B.hdf5", "0.0<z<0.2", s)
+    xi_A, sigma_A, median_z_A = correlation_function("magnitude_limited_A.hdf5", "0.0<z<0.2", s)
+    xi_B, sigma_B, median_z_B = correlation_function("magnitude_limited_B.hdf5", "0.0<z<0.2", s)
     xi = np.mean([xi_A, xi_B], axis=0)
     sigma = np.mean([sigma_A, sigma_B], axis=0)
+    median_z = (median_z_A + median_z_B) / 2
 
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
     fig.suptitle("Correlation Function in Real Space")

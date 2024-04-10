@@ -52,7 +52,7 @@ def bias_evolution(file, catalogue, resamples):
                     s = np.array(corrfunc[catalogue][f"{low_z}<z<{high_z}"]["s"])
                     xi = np.array(corrfunc[catalogue][f"{low_z}<z<{high_z}"]["xi_0"])
                     sigma_xi = np.array(corrfunc[catalogue][f"{low_z}<z<{high_z}"]["sigma"])
-                    median_z = corrfunc[catalogue][f"{low_z}<z<{high_z}"].attrs["median_z"]
+                    median_z = corrfunc[catalogue][f"{low_z}<z<{high_z}"].attrs["median_z_cos"]
 
                     b_1, sigma_b_1, xi_residuals = compute_bias(s, xi, sigma_xi, median_z, resamples)
 

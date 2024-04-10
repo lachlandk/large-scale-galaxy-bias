@@ -7,10 +7,11 @@ def create_correlation_functions(filename, z_bins, base_catalogue=None):
     base = f"{base_catalogue}/" if base_catalogue is not None else ""
     for low_z, high_z in z_bins:
         print(f"Starting on bin {low_z}<z<{high_z}...")
-        xi_A, sigma_A = correlation_function(f"{filename}_A.hdf5", f"{base}{low_z}<z<{high_z}", s_bins)
-        xi_B, sigma_B = correlation_function(f"{filename}_B.hdf5", f"{base}{low_z}<z<{high_z}", s_bins)
+        xi_A, sigma_A, median_z_A = correlation_function(f"{filename}_A.hdf5", f"{base}{low_z}<z<{high_z}", s_bins)
+        xi_B, sigma_B, median_z_B = correlation_function(f"{filename}_B.hdf5", f"{base}{low_z}<z<{high_z}", s_bins)
         xi = np.mean([xi_A, xi_B], axis=0)
         sigma = np.mean([sigma_A, sigma_B], axis=0)
+        median_z = (median_z_A + median_z_B) / 2
 
         with h5py.File(f"correlation_functions/corrfunc_{filename}.hdf5", "a") as corrfunc:
             if f"{base}{low_z}<z<{high_z}" in corrfunc:
@@ -23,6 +24,7 @@ def create_correlation_functions(filename, z_bins, base_catalogue=None):
             save.create_dataset("s", data=s_bins[:-1])
             save.create_dataset("xi_0", data=xi)
             save.create_dataset("sigma", data=sigma)
+            save.attrs["median_z_cos"] = median_z
 
 
 if __name__ == "__main__":
