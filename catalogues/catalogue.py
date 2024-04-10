@@ -2,7 +2,7 @@ import h5py
 import numpy as np
 from tqdm import trange
 from datetime import datetime
-from scipy import optimize, interpolate
+from scipy import optimize, interpolate, integrate
 import matplotlib.pyplot as plt
 import mpl_toolkits.axisartist.angle_helper as angle_helper
 from mpl_toolkits.axisartist.floating_axes import FloatingAxes, GridHelperCurveLinear
@@ -60,6 +60,12 @@ def cosmological_redshift(obs_z, v_r):
     return (1 + obs_z)/(1 + v_r/c) - 1  # correct to linear order
 
 
+def volume(r_min, r_max, ra_min, ra_max, dec_min, dec_max):
+    fraction = integrate.dblquad(lambda _, theta: np.cos(theta), ra_min*np.pi/180, ra_max*np.pi/180, dec_min*np.pi/180, dec_max*np.pi/180)
+    return fraction[0]*(r_max**3 - r_min**3)/3
+
+
+# catalogue creation functions
 def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, 1.5), mag_lims=(-np.inf, 19.5), mass_lims=(-np.inf, np.inf), dec_lims=(0, 90), ra_lims=(0, 90)):
     with h5py.File(f"catalogues/{save_file}", "a") as file:
         catalogue = file.create_group(save_catalogue)
@@ -125,15 +131,15 @@ def select_galaxies(dir, num_files, save_file, save_catalogue, z_lims=(0, 1.5), 
                 cat_mass[start_index:] = mass[data_filter][z_filter]
 
         r_lims = (comoving_distance(z_lims[0]), comoving_distance(z_lims[1]))
-        volume = np.pi/6 * (r_lims[1]**3 - r_lims[0]**3)
+        cat_volume = volume(r_lims[0], r_lims[1], ra_lims[0], ra_lims[1], dec_lims[0], dec_lims[1])        
         median_z = np.median(cat_cos_z)
         catalogue.attrs["r_lims"] = r_lims
         catalogue.attrs["ra_lims"] = ra_lims
         catalogue.attrs["dec_lims"] = dec_lims
         catalogue.attrs["median_z_cos"] = median_z
         catalogue.attrs["total_galaxies"] = total_galaxies
-        catalogue.attrs["number_density"] = total_galaxies / volume
-    return total_galaxies, total_galaxies / volume, median_z
+        catalogue.attrs["number_density"] = total_galaxies / cat_volume
+    return total_galaxies, total_galaxies / cat_volume, median_z
 
 
 def create_random_catalogue(multiplier, data_file, data_catalogue):
@@ -147,7 +153,7 @@ def create_random_catalogue(multiplier, data_file, data_catalogue):
 
         size = multiplier * data_cos_z.shape[0] if data_cos_z.shape[0] > 0 else 0
         ra = np.random.default_rng().uniform(ra_lims[0], ra_lims[1], size)
-        dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(np.cos(dec_lims[1]), np.cos(dec_lims[0]), size))
+        dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(np.cos(np.pi/180 * (90 - dec_lims[1])), np.cos(np.pi/180 * (90 - dec_lims[0])), size))
         cos_z = np.random.default_rng().choice(data_cos_z, size)
         obs_z = np.random.default_rng().choice(data_obs_z, size)
         

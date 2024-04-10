@@ -5,7 +5,7 @@ from catalogue import *
 def create_catalogue(lightcone_dir, files, filename, multiplier):
     z_bins = [(0.74, 0.8), (0.68, 0.74), (0.62, 0.68), (0.56, 0.62), (0.5, 0.56), (0.44, 0.5), (0.38, 0.44), (0.32, 0.38), (0.26, 0.32), (0.2, 0.26)]
     flags = [5, 6]
-    flags_2 = [7, 6, 9, 10]
+    flags_2 = [7, 8, 9, 10]
 
     flag = 1
     for low_z, high_z in z_bins:
