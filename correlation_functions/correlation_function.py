@@ -2,11 +2,7 @@ import h5py
 import numpy as np
 from datetime import datetime
 import matplotlib.pyplot as plt
-# from scipy import interpolate, integrate
 from Corrfunc.mocks.DDsmu_mocks import DDsmu_mocks
-
-# cosmological parameters
-h = 0.6774
 
 
 def correlation_function(data_file, catalogue, s_bins):
@@ -24,12 +20,12 @@ def correlation_function(data_file, catalogue, s_bins):
                 d_pos = np.array(sample[catalogue]["Pos"])
                 d_ra = d_pos[:,0]
                 d_dec = d_pos[:,1]
-                d_dist = d_pos[:,2] / h
-                z_cos = np.array(sample[catalogue]["CosZ"])
+                d_dist = d_pos[:,2]
                 r_pos = np.array(sample[f"{catalogue}/random"]["Pos"])
                 r_ra = r_pos[:,0]
                 r_dec = r_pos[:,1]
-                r_dist = r_pos[:,2] / h
+                r_dist = r_pos[:,2]
+                median_z = sample[catalogue].attrs["median_z"]
 
             # count data pairs
             print(f"Counting data pairs, sample size: {d_pos.shape[0]}...")
@@ -69,7 +65,6 @@ def correlation_function(data_file, catalogue, s_bins):
             if f"{catalogue}/DR" in save_file:
                 DR_pairs = np.array(save_file[catalogue]["DR"])
                 mu = save_file[catalogue].attrs["mu"]
-                median_z = save_file[catalogue].attrs["median_z"]
             else:
                 if d_pos.shape[0] < 2:
                     DR_pairs = np.zeros((len(s_bins) - 1) * nmu_bins)
@@ -78,11 +73,11 @@ def correlation_function(data_file, catalogue, s_bins):
                     DR_pairs_struct = DDsmu_mocks(autocorr=False, cosmology=2, nthreads=16, mu_max=1, nmu_bins=nmu_bins, binfile=s_bins, RA1=d_ra, DEC1=d_dec, CZ1=d_dist, RA2=r_ra, DEC2=r_dec, CZ2=r_dist, is_comoving_dist=True)
                     DR_pairs = DR_pairs_struct["npairs"]
                     mu = DR_pairs_struct["mumax"][0:nmu_bins]
-                median_z = np.median(z_cos)
                 save_file[catalogue].create_dataset("DR", data=DR_pairs)
                 save_file[catalogue].attrs["mu"] = mu
                 save_file[catalogue].attrs["median_z"] = median_z
             print(f"Data-random pairs counted, elapsed time: {datetime.now() - start_time}")
+            print(f"Median (cosmological) redshift in bin: {median_z}")
 
             # calculate correlation function
             print("Calculating correlation function...")
@@ -95,10 +90,6 @@ def correlation_function(data_file, catalogue, s_bins):
             for i in range(len(s_bins) - 1):
                 j = nmu_bins * i
                 xi[i] = np.trapz(corrfunc[j:j+nmu_bins], mu)  # monopole
-                # n = N_D * 6/(np.pi * (s_bins[i+1]**3 - s_bins[i]**3))
-                # xi_interp = interpolate.CubicSpline(np.concatenate(([0], s_bins[:i+1])), np.concatenate(([0], xi[:i+1])))
-                # J_3 = integrate.quad(lambda r: xi_interp(r) * r**2, 0, s_bins[i])[0]
-                # sigma[i] = (1 + xi[i]) * (1 + 4*np.pi*n*J_3) / np.sqrt(np.trapz(DD_pairs[j:j+nmu_bins], mu))
                 sigma[i] = np.sqrt((1 + xi[i]) / np.trapz(DD_pairs[j:j+nmu_bins], mu))
             save_file[catalogue].create_dataset("s", data=s_bins[:-1])
             save_file[catalogue].create_dataset("xi_0", data=xi)
