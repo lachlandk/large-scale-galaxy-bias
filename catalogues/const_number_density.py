@@ -6,7 +6,7 @@ from catalogue import *
 
 def create_catalogue(lightcone_dir, files, filename, multiplier):
     # calculate number density from largest redshift bin
-    total_galaxies, fixed_number_density, median_z = select_galaxies(lightcone_dir, files, filename, "0.45<z<0.5", z_lims=(0.45, 0.5), mass_lims=(11, np.inf))
+    total_galaxies, fixed_number_density, median_z = select_galaxies(lightcone_dir, files, filename, "0.45<z<0.5", z_lims=(0.45, 0.5), mass_lims=(11, np.inf), dec_lims=(30, 90))
     create_random_catalogue(multiplier, filename, "0.45<z<0.5")
     print(f"Number of galaxies in the range 0.45<z<0.5: {total_galaxies}")
     print(f"Galaxy number density: {fixed_number_density}/Mpc^3")
@@ -15,7 +15,7 @@ def create_catalogue(lightcone_dir, files, filename, multiplier):
     # collect samples in other bins and cut them down to size
     z_bins = [(0.4, 0.45), (0.35, 0.4), (0.3, 0.35), (0.25, 0.3), (0.2, 0.25), (0.15, 0.2), (0.1, 0.15), (0.05, 0.1), (0.0, 0.05)]
     for low_z, high_z in z_bins: 
-        total_galaxies, number_density, median_z = select_galaxies(lightcone_dir, files, filename, f"{low_z}<z<{high_z}", z_lims=(low_z, high_z), mass_lims=(11, np.inf))
+        total_galaxies, number_density, median_z = select_galaxies(lightcone_dir, files, filename, f"{low_z}<z<{high_z}", z_lims=(low_z, high_z), mass_lims=(11, np.inf), dec_lims=(30, 90))
         with h5py.File(f"catalogues/{filename}", "r+") as file:
             catalogue = file[f"{low_z}<z<{high_z}"]
             volume = total_galaxies / number_density
