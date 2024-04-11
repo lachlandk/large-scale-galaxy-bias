@@ -5,6 +5,8 @@ from scipy import optimize
 import matplotlib.pyplot as plt
 from colossus.cosmology import cosmology
 
+plt.rcParams["axes.titlesize"] = 15
+plt.rcParams["axes.labelsize"] = 15
 
 # define cosmology for calculating the CDM correlation function
 cosmo = cosmology.setCosmology("mtng", flat=True, H0=67.74, Om0=0.3089, Ob0=0.0486, sigma8=0.8159, ns=0.9667)
@@ -61,10 +63,11 @@ def bias_evolution(file, catalogue, resamples):
                     sigma_b.append(sigma_b_1)
                     residuals.append(xi_residuals)
                 
-                z = np.array(z)
-                bias = np.array(bias)
-                sigma_b = np.array(sigma_b)
-                residuals = np.array(residuals)
+                sorted_indices = np.argsort(z)
+                z = np.array(z)[sorted_indices]
+                bias = np.array(bias)[sorted_indices]
+                sigma_b = np.array(sigma_b)[sorted_indices]
+                residuals = np.array(residuals)[sorted_indices]
             
             try:
                 group = bias_save.create_group(catalogue)
@@ -81,34 +84,45 @@ def bias_evolution(file, catalogue, resamples):
          xi = np.array([corrfunc_save[catalogue][z_bin]["xi_0"] for z_bin in corrfunc_save[catalogue]])
          sigma_xi = np.array([corrfunc_save[catalogue][z_bin]["sigma"] for z_bin in corrfunc_save[catalogue]])
 
-    fig, axes = plt.subplots(2, 5, figsize=(25, 10), layout="constrained")
+    fig, axes = plt.subplots(2, 5, figsize=(25, 10), layout="constrained", sharex=True)
     for i, ax in enumerate(axes.flat):
         j = -1-i
         ax.plot(s[j,], xi[j,])
         ax.plot(s[j,], bias[j]**2*cosmo.correlationFunction(s[j,], z[j]))
-        ax.fill_between(s[j,], xi[j,] + sigma_xi[j,], xi[j,] - sigma_xi[j,], alpha=0.5)
+        ax.fill_between(s[j,], xi[j,] + sigma_xi[j,], xi[j,] - sigma_xi[j,], alpha=0.3)
         ax.annotate(f"$b_1={np.round(bias[j], decimals=2)}\\pm{np.round(sigma_b[j], decimals=2)}$", (0.05, 0.9), xycoords="axes fraction", fontsize=15)
         ax.annotate(f"$z={np.round(z[j], decimals=2)}$", (0.05, 0.8), xycoords="axes fraction", fontsize=15)
 
         inset = ax.inset_axes([0.55, 0.55, 0.4, 0.4])
         try:
             inset.hist(residuals[j,], bins=20, range=(np.nanmin(residuals[j,]), np.nanmax(residuals[j,])))
+            inset.set_ylabel("Bin count")
+            inset.set_xlabel("$(\\xi_g-b_1^2\\xi_m)/\\sigma$")
         except ValueError:
             pass
 
+        axes.flat[0].set_ylabel("Correlation function $\\xi(r)$")
+        axes.flat[5].set_ylabel("Correlation function $\\xi(r)$")
+        axes.flat[5].set_xlabel("Separation $r$")
+        axes.flat[6].set_xlabel("Separation $r$")
+        axes.flat[7].set_xlabel("Separation $r$")
+        axes.flat[8].set_xlabel("Separation $r$")
+        axes.flat[9].set_xlabel("Separation $r$")
+
     if catalogue == "/":
-        fig.savefig(f"bias_evolution/bias_{file}.png")
+        fig.savefig(f"bias_evolution/bias_{file}.pdf")
     else:
-        fig.savefig(f"bias_evolution/bias_{file}_{catalogue.replace('<', '_lt_').replace('.', '_')}.png")
+        fig.savefig(f"bias_evolution/bias_{file}_{catalogue.replace('<', '_lt_').replace('.', '_')}.pdf")
+
 
 if __name__ == "__main__":
     # constant number density sample 
     bias_evolution("const_number_density", "/", 1000)
 
     # constant stellar mass sample
-    bias_evolution("const_stellar_mass", "11<m<inf", 1000)
+    bias_evolution("const_stellar_mass", "11.5<m<inf", 1000)
+    bias_evolution("const_stellar_mass", "11<m<11.5", 1000)
     bias_evolution("const_stellar_mass", "10.5<m<11", 1000)
-    bias_evolution("const_stellar_mass", "10<m<10.5", 1000)
 
     # magnitude limited sample
     bias_evolution("magnitude_limited", "/", 1000)
