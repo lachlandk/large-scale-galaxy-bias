@@ -103,11 +103,11 @@ def bias_evolution(file, catalogue, resamples):
 
         axes.flat[0].set_ylabel("Correlation function $\\xi(r)$")
         axes.flat[5].set_ylabel("Correlation function $\\xi(r)$")
-        axes.flat[5].set_xlabel("Separation $r$")
-        axes.flat[6].set_xlabel("Separation $r$")
-        axes.flat[7].set_xlabel("Separation $r$")
-        axes.flat[8].set_xlabel("Separation $r$")
-        axes.flat[9].set_xlabel("Separation $r$")
+        axes.flat[5].set_xlabel("Separation $r$ [Mpc]")
+        axes.flat[6].set_xlabel("Separation $r$ [Mpc]")
+        axes.flat[7].set_xlabel("Separation $r$ [Mpc]")
+        axes.flat[8].set_xlabel("Separation $r$ [Mpc]")
+        axes.flat[9].set_xlabel("Separation $r$ [Mpc]")
 
     if catalogue == "/":
         fig.savefig(f"bias_evolution/bias_{file}.pdf")
