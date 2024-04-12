@@ -199,12 +199,12 @@ if __name__ == "__main__":
 
     ax.plot(z[:,0], bias[:,0], label="Sample 1: Constant Number Density")
     ax.fill_between(z[:,0], bias[:,0]+sigma_b[:,0], bias[:,0]-sigma_b[:,0], alpha=0.5)
-    ax.plot(z[:,1], bias[:,1], label="Sample 2A: Constant Stellar Mass $11.5<m<\\infty$")
-    ax.fill_between(z[:,1], bias[:,1]+sigma_b[:,1], bias[:,1]-sigma_b[:,1], alpha=0.5)
+    ax.plot(z[:-1,1], bias[:-1,1], label="Sample 2A: Constant Stellar Mass $11.5<m<\\infty$")
+    ax.fill_between(z[:-1,1], bias[:-1,1]+sigma_b[:-1,1], bias[:-1,1]-sigma_b[:-1,1], alpha=0.5)
     ax.plot(z[:,2], bias[:,2], label="Sample 2B: Constant Stellar Mass $11<m<11.5$")
     ax.fill_between(z[:,2], bias[:,2]+sigma_b[:,2], bias[:,2]-sigma_b[:,2], alpha=0.5)
-    ax.plot(z[:,3], bias[:,3], label="Sample 2C: Constant Stellar Mass $10.5<m<11$")
-    ax.fill_between(z[:,3], bias[:,3]+sigma_b[:,3], bias[:,3]-sigma_b[:,3], alpha=0.5)
+    ax.plot(z[:-2,3], bias[:-2,3], label="Sample 2C: Constant Stellar Mass $10.5<m<11$")
+    ax.fill_between(z[:-2,3], bias[:-2,3]+sigma_b[:-2,3], bias[:-2,3]-sigma_b[:-2,3], alpha=0.5)
     ax.plot(z[:,4], bias[:,4], label="Sample 3: Magnitude Limited")
     ax.fill_between(z[:,4], bias[:,4]+sigma_b[:,4], bias[:,4]-sigma_b[:,4], alpha=0.5)
 
