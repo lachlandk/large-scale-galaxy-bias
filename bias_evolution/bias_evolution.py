@@ -1,9 +1,9 @@
 import h5py
 import numpy as np
-from tqdm import trange
-from scipy import optimize
 import matplotlib.pyplot as plt
 from colossus.cosmology import cosmology
+
+from mcmc_fit import mcmc, plot_model, plot_posterior_1d, plot_chains
 
 plt.rcParams["axes.titlesize"] = 15
 plt.rcParams["axes.labelsize"] = 15
@@ -12,118 +12,136 @@ plt.rcParams["axes.labelsize"] = 15
 cosmo = cosmology.setCosmology("mtng", flat=True, H0=67.74, Om0=0.3089, Ob0=0.0486, sigma8=0.8159, ns=0.9667)
 
 
-def chi_2(b_1, s, xi, sigma, z):
-    return np.sum(norm_residuals(b_1, s, xi, sigma, z)**2)
+# linear bias model for correlation function
+def linear_bias(theta, args):
+    b_1 = theta[0]
+    s, _, _, z = args
+    return b_1**2 * cosmo.correlationFunction(s, z=z)
 
 
-def norm_residuals(b_1, s, xi, sigma, z):
-    return (xi - b_1**2 * cosmo.correlationFunction(s, z=z))/sigma
+# assume bias must be greater than one
+def log_prior(theta):
+    b_1 = theta[0]
+    if b_1 > 1:
+        return 0.0
+    return -np.inf
 
 
-def compute_bias(s, xi, sigma, z, resamples):
-    bias_fit = optimize.minimize(chi_2, 2, args=(s, xi, sigma, z))
+def bias_evolution(file, catalogue, nwalkers, total_steps, burn_in_steps):
+    # load correlation functions
+    with h5py.File(f"correlation_functions/corrfunc_{file}.hdf5", "r") as corrfunc_save:
+        s = np.array([corrfunc_save[catalogue][z_bin]["s"] for z_bin in corrfunc_save[catalogue]])
+        xi = np.array([corrfunc_save[catalogue][z_bin]["xi_0"] for z_bin in corrfunc_save[catalogue]])
+        sigma_xi = np.array([corrfunc_save[catalogue][z_bin]["sigma"] for z_bin in corrfunc_save[catalogue]])
+        z = np.array([corrfunc_save[catalogue][z_bin].attrs["median_z_cos"] for z_bin in corrfunc_save[catalogue]])
 
-    # bootstrap to get the variance
-    N = xi.shape[0]
-    sorted_indices = np.arange(N)
-    resampled_bias = np.ndarray(resamples)
-    for i in trange(resamples):
-        indices = np.random.default_rng().choice(sorted_indices, N)
-        resampled_bias_fit = optimize.minimize(chi_2, 2, args=(s[indices], xi[indices], sigma[indices], z))
-        resampled_bias[i] = resampled_bias_fit.x[0]
-
-    return bias_fit.x[0], np.std(resampled_bias), norm_residuals(bias_fit.x[0], s, xi, sigma, z)
-
-
-def bias_evolution(file, catalogue, resamples):
+    # open save file
     with h5py.File(f"bias_evolution/bias_{file}.hdf5", "a") as bias_save:
+        # try accessing saved optimal values
         try:
-            bias = np.array(bias_save[catalogue]["b_1"])
-            z = np.array(bias_save[catalogue]["z"])
-            sigma_b = np.array(bias_save[catalogue]["sigma"])
-            residuals = np.array(bias_save[catalogue]["residuals"])
+            b_1 = np.array(bias_save[catalogue]["b_1"])
+            sigma_b_1 = np.array(bias_save[catalogue]["sigma_b_1"])
+            posteriors_all_bins = np.array(bias_save[catalogue]["posterior"])
+            chains_all_bins = np.array(bias_save[catalogue]["chains"])
+        # otherwise calculate them if they aren't saved
         except (ValueError, KeyError):
-            z = []
-            bias = []
-            sigma_b = []
-            residuals = []
-            with h5py.File(f"correlation_functions/corrfunc_{file}.hdf5", "r") as corrfunc:
-                for i, z_bin in enumerate(corrfunc[catalogue]):
-                    low_z = float(z_bin.split("<")[0])
-                    high_z = float(z_bin.split("<")[2])
-                    s = np.array(corrfunc[catalogue][f"{low_z}<z<{high_z}"]["s"])
-                    xi = np.array(corrfunc[catalogue][f"{low_z}<z<{high_z}"]["xi_0"])
-                    sigma_xi = np.array(corrfunc[catalogue][f"{low_z}<z<{high_z}"]["sigma"])
-                    median_z = corrfunc[catalogue][f"{low_z}<z<{high_z}"].attrs["median_z_cos"]
+            posteriors_all_bins = []
+            chains_all_bins = []
 
-                    b_1, sigma_b_1, xi_residuals = compute_bias(s, xi, sigma_xi, median_z, resamples)
+            # sample posterior distribution for each redshift bin
+            for i in range(z.shape[0]):
+                posterior, chains = mcmc(linear_bias, log_prior, (s[i], xi[i], sigma_xi[i], z[i]), 1, nwalkers, 1, total_steps, burn_in_steps)
+                posteriors_all_bins.append(posterior)
+                chains_all_bins.append(chains)
 
-                    z.append(median_z)
-                    bias.append(b_1)
-                    sigma_b.append(sigma_b_1)
-                    residuals.append(xi_residuals)
-                
-                sorted_indices = np.argsort(z)
-                z = np.array(z)[sorted_indices]
-                bias = np.array(bias)[sorted_indices]
-                sigma_b = np.array(sigma_b)[sorted_indices]
-                residuals = np.array(residuals)[sorted_indices]
-            
+            # put all redshift bins in order
+            sorted_indices = np.argsort(z)
+            z = np.array(z)[sorted_indices]
+            posteriors_all_bins = np.array(posteriors_all_bins)[sorted_indices]
+            chains_all_bins = np.array(chains_all_bins)[sorted_indices]
+
+            # calculate optimal values
+            b_1 = np.mean(posteriors_all_bins, axis=1).squeeze()
+            sigma_b_1 = np.std(posteriors_all_bins, axis=1).squeeze()
+
+            # save optimal values
+            # try creating a group with the catalogue name
             try:
                 group = bias_save.create_group(catalogue)
+            # if catalogue is "/", save to root
             except ValueError:
                 group = bias_save
             group.create_dataset("z", data=z)
-            group.create_dataset("b_1", data=bias)
-            group.create_dataset("sigma", data=sigma_b)
-            group.create_dataset("residuals", data=residuals)
+            group.create_dataset("b_1", data=b_1)
+            group.create_dataset("sigma_b_1", data=sigma_b_1)
+            group.create_dataset("posterior", data=posteriors_all_bins)
+            group.create_dataset("chains", data=chains_all_bins)
 
-    # plot of linear matter power spectrum and correlation function
+    # plots
     with h5py.File(f"correlation_functions/corrfunc_{file}.hdf5", "r") as corrfunc_save:
          s = np.array([corrfunc_save[catalogue][z_bin]["s"] for z_bin in corrfunc_save[catalogue]])
          xi = np.array([corrfunc_save[catalogue][z_bin]["xi_0"] for z_bin in corrfunc_save[catalogue]])
          sigma_xi = np.array([corrfunc_save[catalogue][z_bin]["sigma"] for z_bin in corrfunc_save[catalogue]])
 
-    fig, axes = plt.subplots(2, 5, figsize=(25, 10), layout="constrained", sharex=True)
+     # plot model with samples from posterior 
+    model_fig, axes = plt.subplots(2, 5, figsize=(25, 10), layout="constrained", sharex=True)
     for i, ax in enumerate(axes.flat):
-        j = -1-i
-        ax.plot(s[j,], xi[j,])
-        ax.plot(s[j,], bias[j]**2*cosmo.correlationFunction(s[j,], z[j]))
-        ax.fill_between(s[j,], xi[j,] + sigma_xi[j,], xi[j,] - sigma_xi[j,], alpha=0.3)
-        ax.annotate(f"$b_1={np.round(bias[j], decimals=2)}\\pm{np.round(sigma_b[j], decimals=2)}$", (0.05, 0.9), xycoords="axes fraction", fontsize=15)
+        # iterate backwards through the ax list
+        j = - 1 - i
+
+        plot_model(ax, (b_1[j],), linear_bias, (s[j], xi[j], sigma_xi[j], z[j]), posteriors_all_bins[j], samples=50)
+        ax.annotate(f"$b_1={np.round(b_1[j], decimals=2)}\\pm{np.round(sigma_b_1[j], decimals=2)}$", (0.05, 0.9), xycoords="axes fraction", fontsize=15)
         ax.annotate(f"$z={np.round(z[j], decimals=2)}$", (0.05, 0.8), xycoords="axes fraction", fontsize=15)
 
+        # plot posterior distribution in an inset
         inset = ax.inset_axes([0.55, 0.55, 0.4, 0.4])
-        try:
-            inset.hist(residuals[j,], bins=20, range=(np.nanmin(residuals[j,]), np.nanmax(residuals[j,])))
-            inset.set_ylabel("Bin count")
-            inset.set_xlabel("$(\\xi_g-b_1^2\\xi_m)/\\sigma$")
-        except ValueError:
-            pass
+        plot_posterior_1d(inset, posteriors_all_bins[j], bins=20)
+        inset.set_ylabel("$p(b_1|\\xi(r))$")
+        inset.set_xlabel("$b_1$")
 
-        axes.flat[0].set_ylabel("Correlation function $\\xi(r)$")
-        axes.flat[5].set_ylabel("Correlation function $\\xi(r)$")
-        axes.flat[5].set_xlabel("Separation $r$ [Mpc]")
-        axes.flat[6].set_xlabel("Separation $r$ [Mpc]")
-        axes.flat[7].set_xlabel("Separation $r$ [Mpc]")
-        axes.flat[8].set_xlabel("Separation $r$ [Mpc]")
-        axes.flat[9].set_xlabel("Separation $r$ [Mpc]")
+    axes.flat[0].set_ylabel("Correlation function $\\xi(r)$")
+    axes.flat[5].set_ylabel("Correlation function $\\xi(r)$")
+    axes.flat[5].set_xlabel("Separation $r$ [Mpc]")
+    axes.flat[6].set_xlabel("Separation $r$ [Mpc]")
+    axes.flat[7].set_xlabel("Separation $r$ [Mpc]")
+    axes.flat[8].set_xlabel("Separation $r$ [Mpc]")
+    axes.flat[9].set_xlabel("Separation $r$ [Mpc]")
+
+    # plot of chains
+    chains_fig, axes = plt.subplots(2, 5, figsize=(25, 10), layout="constrained", sharex=True)
+    for i, ax in enumerate(axes.flat):
+        # iterate backwards through the ax list
+        j = - 1 - i
+
+        plot_chains(ax, chains_all_bins[j], burn_in_steps)
+        ax.annotate(f"$b_1={np.round(b_1[j], decimals=2)}\\pm{np.round(sigma_b_1[j], decimals=2)}$", (0.05, 0.9), xycoords="axes fraction", fontsize=15)
+        ax.annotate(f"$z={np.round(z[j], decimals=2)}$", (0.05, 0.8), xycoords="axes fraction", fontsize=15)
+
+    axes.flat[0].set_ylabel("$b_1$")
+    axes.flat[5].set_ylabel("$b_1$")
+    axes.flat[5].set_xlabel("Steps")
+    axes.flat[6].set_xlabel("Steps")
+    axes.flat[7].set_xlabel("Steps")
+    axes.flat[8].set_xlabel("Steps")
+    axes.flat[9].set_xlabel("Steps")
 
     if catalogue == "/":
-        fig.savefig(f"bias_evolution/bias_{file}.pdf")
+        model_fig.savefig(f"bias_evolution/bias_measurements_{file}.pdf")
+        chains_fig.savefig(f"bias_evolution/bias_chains_{file}.pdf")
     else:
-        fig.savefig(f"bias_evolution/bias_{file}_{catalogue.replace('<', '_lt_').replace('.', '_')}.pdf")
+        model_fig.savefig(f"bias_evolution/bias_measurements_{file}_{catalogue.replace('<', '_lt_').replace('.', '_')}.pdf")
+        chains_fig.savefig(f"bias_evolution/bias_chains_{file}_{catalogue.replace('<', '_lt_').replace('.', '_')}.pdf")
 
 
 if __name__ == "__main__":
     # constant number density sample 
-    bias_evolution("const_number_density", "/", 1000)
+    bias_evolution("const_number_density", "/", 32, 5000, 100)
 
     # constant stellar mass sample
-    bias_evolution("const_stellar_mass", "11.5<m<inf", 1000)
-    bias_evolution("const_stellar_mass", "11<m<11.5", 1000)
-    bias_evolution("const_stellar_mass", "10.5<m<11", 1000)
+    bias_evolution("const_stellar_mass", "11.5<m<inf", 32, 5000, 100)
+    bias_evolution("const_stellar_mass", "11<m<11.5", 32, 5000, 100)
+    bias_evolution("const_stellar_mass", "10.5<m<11", 32, 5000, 100)
 
     # magnitude limited sample
-    bias_evolution("magnitude_limited", "/", 1000)
+    bias_evolution("magnitude_limited", "/", 32, 5000, 100)
         
