@@ -27,22 +27,22 @@ def log_prior(theta):
     return -np.inf
 
 
-def bias_evolution(file, catalogue, nwalkers, total_steps, burn_in_steps):
+def bias_evolution(catalogue, subsample, nwalkers, total_steps, burn_in_steps):
     # load correlation functions
-    with h5py.File(f"correlation_functions/corrfunc_{file}.hdf5", "r") as corrfunc_save:
-        s = np.array([corrfunc_save[catalogue][z_bin]["s"] for z_bin in corrfunc_save[catalogue]])
-        xi = np.array([corrfunc_save[catalogue][z_bin]["xi_0"] for z_bin in corrfunc_save[catalogue]])
-        sigma_xi = np.array([corrfunc_save[catalogue][z_bin]["sigma"] for z_bin in corrfunc_save[catalogue]])
-        z = np.array([corrfunc_save[catalogue][z_bin].attrs["median_z_cos"] for z_bin in corrfunc_save[catalogue]])
+    with h5py.File(f"correlation_functions/corrfunc_{catalogue}.hdf5", "r") as corrfunc_save:
+        s = np.array([corrfunc_save[subsample][z_bin]["s"] for z_bin in corrfunc_save[subsample]])
+        xi = np.array([corrfunc_save[subsample][z_bin]["xi_0"] for z_bin in corrfunc_save[subsample]])
+        sigma_xi = np.array([corrfunc_save[subsample][z_bin]["sigma"] for z_bin in corrfunc_save[subsample]])
+        z = np.array([corrfunc_save[subsample][z_bin].attrs["median_z_cos"] for z_bin in corrfunc_save[subsample]])
 
     # open save file
-    with h5py.File(f"bias_evolution/bias_{file}.hdf5", "a") as bias_save:
+    with h5py.File(f"bias_evolution/bias_measurements.hdf5", "a") as bias_save:
         # try accessing saved optimal values
         try:
-            b_1 = np.array(bias_save[catalogue]["b_1"])
-            sigma_b_1 = np.array(bias_save[catalogue]["sigma_b_1"])
-            posteriors_all_bins = np.array(bias_save[catalogue]["posterior"])
-            chains_all_bins = np.array(bias_save[catalogue]["chains"])
+            b_1 = np.array(bias_save[catalogue][subsample]["b_1"])
+            sigma_b_1 = np.array(bias_save[catalogue][subsample]["sigma_b_1"])
+            posteriors_all_bins = np.array(bias_save[catalogue][subsample]["posterior"])
+            chains_all_bins = np.array(bias_save[catalogue][subsample]["chains"])
         # otherwise calculate them if they aren't saved
         except (ValueError, KeyError):
             posteriors_all_bins = []
@@ -65,23 +65,12 @@ def bias_evolution(file, catalogue, nwalkers, total_steps, burn_in_steps):
             sigma_b_1 = np.std(posteriors_all_bins, axis=1).squeeze()
 
             # save optimal values
-            # try creating a group with the catalogue name
-            try:
-                group = bias_save.create_group(catalogue)
-            # if catalogue is "/", save to root
-            except ValueError:
-                group = bias_save
-            group.create_dataset("z", data=z)
-            group.create_dataset("b_1", data=b_1)
-            group.create_dataset("sigma_b_1", data=sigma_b_1)
-            group.create_dataset("posterior", data=posteriors_all_bins)
-            group.create_dataset("chains", data=chains_all_bins)
-
-    # plots
-    with h5py.File(f"correlation_functions/corrfunc_{file}.hdf5", "r") as corrfunc_save:
-         s = np.array([corrfunc_save[catalogue][z_bin]["s"] for z_bin in corrfunc_save[catalogue]])
-         xi = np.array([corrfunc_save[catalogue][z_bin]["xi_0"] for z_bin in corrfunc_save[catalogue]])
-         sigma_xi = np.array([corrfunc_save[catalogue][z_bin]["sigma"] for z_bin in corrfunc_save[catalogue]])
+            group = f"{catalogue}/{subsample}" if subsample != "." else catalogue
+            bias_save.create_dataset(f"{group}/z", data=z)
+            bias_save.create_dataset(f"{group}/b_1", data=b_1)
+            bias_save.create_dataset(f"{group}/sigma_b_1", data=sigma_b_1)
+            bias_save.create_dataset(f"{group}/posterior", data=posteriors_all_bins)
+            bias_save.create_dataset(f"{group}/chains", data=chains_all_bins)
 
      # plot model with samples from posterior 
     model_fig, axes = plt.subplots(2, 5, figsize=(25, 10), layout="constrained", sharex=True)
@@ -125,23 +114,28 @@ def bias_evolution(file, catalogue, nwalkers, total_steps, burn_in_steps):
     axes.flat[8].set_xlabel("Steps")
     axes.flat[9].set_xlabel("Steps")
 
-    if catalogue == "/":
-        model_fig.savefig(f"bias_evolution/bias_measurements_{file}.pdf")
-        chains_fig.savefig(f"bias_evolution/bias_chains_{file}.pdf")
+    if subsample == ".":
+        model_fig.savefig(f"bias_evolution/bias_measurements_{catalogue}.pdf")
+        chains_fig.savefig(f"bias_evolution/bias_chains_{catalogue}.pdf")
     else:
-        model_fig.savefig(f"bias_evolution/bias_measurements_{file}_{catalogue.replace('<', '_lt_').replace('.', '_')}.pdf")
-        chains_fig.savefig(f"bias_evolution/bias_chains_{file}_{catalogue.replace('<', '_lt_').replace('.', '_')}.pdf")
+        model_fig.savefig(f"bias_evolution/bias_measurements_{catalogue}_{subsample.replace('<', '_lt_').replace('.', '_')}.pdf")
+        chains_fig.savefig(f"bias_evolution/bias_chains_{catalogue}_{subsample.replace('<', '_lt_').replace('.', '_')}.pdf")
 
 
 if __name__ == "__main__":
-    # constant number density sample 
-    bias_evolution("const_number_density", "/", 32, 5000, 100)
+    # constant number density sample
+    print("Calculating bias in constant number density sample")
+    bias_evolution("const_number_density", ".", 32, 5000, 100)
 
     # constant stellar mass sample
+    print("Calculating bias in constant stellar mass (high) sample")
     bias_evolution("const_stellar_mass", "11.5<m<inf", 32, 5000, 100)
+    print("Calculating bias in constant stellar mass (medium) sample")
     bias_evolution("const_stellar_mass", "11<m<11.5", 32, 5000, 100)
+    print("Calculating bias in constant stellar mass (low) sample")
     bias_evolution("const_stellar_mass", "10.5<m<11", 32, 5000, 100)
 
     # magnitude limited sample
-    bias_evolution("magnitude_limited", "/", 32, 5000, 100)
+    print("Calculating bias in magnitude limited sample")
+    bias_evolution("magnitude_limited", ".", 32, 5000, 100)
         
