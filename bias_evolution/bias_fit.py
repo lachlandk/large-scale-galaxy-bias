@@ -72,6 +72,10 @@ def fit_bias_evolution_conserved(catalogue, subsample, nwalkers, total_steps, bu
         model_fig.savefig(f"bias_evolution/bias_evolution_conserved_{catalogue}_{subsample.replace('<', '_lt_').replace('.', '_')}.pdf")
 
 
+def fit_bias_evolution_non_conserved(cataloge, subsample, nwalkers, total_steps, burn_in_steps):
+    pass
+
+
 if __name__ == "__main__":
     print("Fitting bias evolution for constant number density sample")
     fit_bias_evolution_conserved("const_number_density", ".", 32, 5000, 100)

@@ -22,7 +22,11 @@ def mcmc(model, log_prior, args, start, nwalkers, ndim, total_steps, burn_in_ste
 
     samples = sampler.get_chain()
     flat_samples = sampler.get_chain(discard=burn_in_steps, flat=True)
-    print(f"Autocorrelation times: {sampler.get_autocorr_time()}")
+
+    try:
+        print(f"Autocorrelation times: {sampler.get_autocorr_time()}")
+    except emcee.autocorr.AutocorrError:
+        pass
 
     return flat_samples, samples
 
