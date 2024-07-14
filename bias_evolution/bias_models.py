@@ -33,9 +33,13 @@ def b_1_conserved_tracers(z, b_1_i):
     return (b_1_i - 1) * D(np.max(z))/D(z) + 1
 
 
+def logistic(z, z_0, k):
+    return 1/(1 + np.exp(-k*(z_0 - z)))
+
+
 # sources and sinks of galaxies as a function of time
-def A(z, z_star, sigma_0):
-    return np.exp(-np.log((z_star+1)/(z+1))**2/(2*sigma_0**2))
+def A(z, z_0, k):
+    return -k*logistic(z, z_0, k)*(1 - logistic(z, z_0, k))
 
 
 def j(z, alpha_1, alpha_2):
@@ -43,23 +47,23 @@ def j(z, alpha_1, alpha_2):
 
 
 # comoving galaxy number density as a function of time
-def n_g(z, n_g_i, z_star, sigma_0, alpha_1, alpha_2):
+def n_g(z, n_g_i, z_0, k, alpha_1, alpha_2):
     integrals = np.ndarray(z.shape[0])
     for i in range(z.shape[0]):
-        integrals[i] = integrate.quad(lambda z_: A(z_, z_star, sigma_0)*j(z_, alpha_1, alpha_2)/(1+z_), z[i], np.max(z))[0]
+        integrals[i] = integrate.quad(lambda z_: A(z_, z_0, k)*j(z_, alpha_1, alpha_2)/(1+z_), z[i], np.max(z))[0]
     return n_g_i + integrals
 
 
-def b_1_non_conserved_tracers(z, n_g_i, z_star, sigma_0, alpha_1, alpha_2, b_1_i):
+def b_1_non_conserved_tracers(z, n_g_i, z_0, k, alpha_1, alpha_2, b_1_i):
     # instantaneous formation bias
     def b_1_star(z):
         return 1 + alpha_2 / (alpha_1/(1+z)**3 + alpha_2)
 
 
     integrals = np.ndarray(z.shape[0])
-    number_density = n_g(z, n_g_i, z_star, sigma_0, alpha_1, alpha_2)
+    number_density = n_g(z, n_g_i, z_0, k, alpha_1, alpha_2)
     for i in range(z.shape[0]):
-        integrals[i] = integrate.quad(lambda z_: A(z_, z_star, sigma_0)*j(z_, alpha_1, alpha_2)*(b_1_star(z_) - 1)*D(z_)/(1+z_), z[i], np.max(z))[0]
+        integrals[i] = integrate.quad(lambda z_: A(z_, z_0, k)*j(z_, alpha_1, alpha_2)*(b_1_star(z_) - 1)*D(z_)/(1+z_), z[i], np.max(z))[0]
     return 1 + (b_1_i - 1)*number_density[np.argmax(z)]*D(np.max(z))/(number_density*D(z)) + 1/(number_density*D(z)) * integrals
 
 

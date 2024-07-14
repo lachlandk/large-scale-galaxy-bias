@@ -8,14 +8,14 @@ from bias_models import n_g as number_density
 
 
 def number_density_evolution(theta, args):
-    z_star, sigma_0, alpha_1, alpha_2 = theta
+    z_0, k, alpha_1, alpha_2 = theta
     z, n_g, _ = args
-    return number_density(z, n_g[np.argmax(z)], z_star, sigma_0, alpha_1, alpha_2)
+    return number_density(z, n_g[np.argmax(z)], z_0, k, alpha_1, alpha_2)
 
 
 def number_density_log_priors(theta):
-    z_star, sigma_0, alpha_1, alpha_2 = theta
-    if z_star > 0 and z_star < 3 and sigma_0 > 0 and sigma_0 < 1 and alpha_1 < 1 and alpha_2 < 1:
+    z_0, k, alpha_1, alpha_2 = theta
+    if z_0 > 0 and z_0 < 3:
         return 0.0
     return -np.inf
 
@@ -36,7 +36,7 @@ def fit_number_density_evolution(catalogue, subsample, nwalkers, total_steps, bu
             posterior = np.array(number_density_save[catalogue][subsample]["posterior"])
             chains = np.array(number_density_save[catalogue][subsample]["chains"])
         except (ValueError, KeyError):
-            initial = (0.3, 0.5, 0.01, -0.001)
+            initial = (0.3, 1, 0.01, -0.001)
             # initial = np.clip(np.random.default_rng().normal((0.3, 0.5, 0.01, -0.001), (0.01, 0.025, 0.0005, 0.00005), (nwalkers, 4)), (0, 0, -np.inf, -np.inf), (3, 1, 1, 1))
             posterior, chains = mcmc(number_density_evolution, number_density_log_priors, (z, n_g, sigma_n_g), initial, nwalkers, 4, total_steps, burn_in_steps)
             params = np.median(posterior, axis=0)
@@ -56,8 +56,8 @@ def fit_number_density_evolution(catalogue, subsample, nwalkers, total_steps, bu
     ax.set_xlabel("$z$")
     ax.set_ylabel("$n_g$")
     model_fig.suptitle(f"Number density evolution: {catalogue}/{subsample}")
-    ax.annotate(f"$z_\\ast={params[0]}\\pm{sigma_params[0]}$", (0.05, 0.95), xycoords="axes fraction", fontsize=15)
-    ax.annotate(f"$\\sigma_0={params[1]}\\pm{sigma_params[1]}$", (0.05, 0.9), xycoords="axes fraction", fontsize=15)
+    ax.annotate(f"$z_0={params[0]}\\pm{sigma_params[0]}$", (0.05, 0.95), xycoords="axes fraction", fontsize=15)
+    ax.annotate(f"$k={params[1]}\\pm{sigma_params[1]}$", (0.05, 0.9), xycoords="axes fraction", fontsize=15)
     ax.annotate(f"$\\alpha_1={params[2]}\\pm{sigma_params[2]}$", (0.05, 0.85), xycoords="axes fraction", fontsize=15)
     ax.annotate(f"$\\alpha_2={params[3]}\\pm{sigma_params[3]}$", (0.05, 0.8), xycoords="axes fraction", fontsize=15)
 
@@ -67,20 +67,20 @@ def fit_number_density_evolution(catalogue, subsample, nwalkers, total_steps, bu
     # plot posterior as corner plot
     corner_fig, axes = plt.subplots(4, 4, figsize=(10, 10), layout="constrained")
     plot_corner(axes, clipped_posterior, 20)
-    axes[3, 0].set_xlabel("$z_\\ast$")
-    axes[3, 1].set_xlabel("$\\sigma_0$")
+    axes[3, 0].set_xlabel("$z_0$")
+    axes[3, 1].set_xlabel("$k$")
     axes[3, 2].set_xlabel("$\\alpha_1$")
     axes[3, 3].set_xlabel("$\\alpha_2$")
-    axes[1, 0].set_ylabel("$\\sigma_0$")
+    axes[1, 0].set_ylabel("$k$")
     axes[2, 0].set_ylabel("$\\alpha_1$")
     axes[3, 0].set_ylabel("$\\alpha_2$")
     
     # plot chains
     chains_fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(10, 10), sharex=True, layout="constrained")
     plot_chains(ax1, chains, burn_in_steps, param_index=0)
-    ax1.set_ylabel("$z_\\ast$")
+    ax1.set_ylabel("$z_0$")
     plot_chains(ax2, chains, burn_in_steps, param_index=1)
-    ax2.set_ylabel("$\\sigma_0$")
+    ax2.set_ylabel("$k$")
     plot_chains(ax3, chains, burn_in_steps, param_index=2)
     ax3.set_ylabel("$\\alpha_1$")
     plot_chains(ax4, chains, burn_in_steps, param_index=3)

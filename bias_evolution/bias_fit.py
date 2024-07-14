@@ -14,8 +14,8 @@ def conserved_bias_evolution(theta, args):
 
 def non_conserved_bias_evolution(theta, args):
     b_1_i = theta[0]
-    z, _, _, n_g_i, z_star, sigma_0, alpha_1, alpha_2 = args
-    return b_1_non_conserved_tracers(z, n_g_i, z_star, sigma_0, alpha_1, alpha_2, b_1_i)
+    z, _, _, n_g_i, z_0, k, alpha_1, alpha_2 = args
+    return b_1_non_conserved_tracers(z, n_g_i, z_0, k, alpha_1, alpha_2, b_1_i)
 
 
 def log_prior(theta):
@@ -89,7 +89,7 @@ def fit_bias_evolution_non_conserved(catalogue, subsample, nwalkers, total_steps
         n_g_i = np.array(measured_number_density[subsample]["n_g"])[np.argmax(z)]
 
     with h5py.File(f"bias_evolution/number_density_evolution.hdf5", "r") as number_density_parameters:
-        z_star, sigma_0, alpha_1, alpha_2 = np.array(number_density_parameters[catalogue][subsample]["params"])
+        z_0, k, alpha_1, alpha_2 = np.array(number_density_parameters[catalogue][subsample]["params"])
 
     # open save file
     with h5py.File(f"bias_evolution/bias_evolution_non_conserved.hdf5", "a") as bias_save:
@@ -101,7 +101,7 @@ def fit_bias_evolution_non_conserved(catalogue, subsample, nwalkers, total_steps
             chains = np.array(bias_save[catalogue][subsample]["chains"])
 
         except (ValueError, KeyError):
-            posterior, chains = mcmc(non_conserved_bias_evolution, log_prior, (z, b_1, sigma_b_1, n_g_i, z_star, sigma_0, alpha_1, alpha_2), 1, nwalkers, 1, total_steps, burn_in_steps)
+            posterior, chains = mcmc(non_conserved_bias_evolution, log_prior, (z, b_1, sigma_b_1, n_g_i, z_0, k, alpha_1, alpha_2), 1, nwalkers, 1, total_steps, burn_in_steps)
             b_1_i = np.mean(posterior)
             sigma_b_1_i = np.std(posterior)
 
@@ -114,7 +114,7 @@ def fit_bias_evolution_non_conserved(catalogue, subsample, nwalkers, total_steps
 
     # plots
     model_fig, ax = plt.subplots(1, 1, figsize=(10, 10), layout="constrained")
-    plot_model(ax, (b_1_i,), non_conserved_bias_evolution, (z, b_1, sigma_b_1, n_g_i, z_star, sigma_0, alpha_1, alpha_2), posterior, 50)
+    plot_model(ax, (b_1_i,), non_conserved_bias_evolution, (z, b_1, sigma_b_1, n_g_i, z_0, k, alpha_1, alpha_2), posterior, 50)
     ax.fill_between(z, b_1 - sigma_b_1, b_1 + sigma_b_1, alpha=0.2)
     ax.invert_xaxis()
     ax.set_xlabel("$z$")
