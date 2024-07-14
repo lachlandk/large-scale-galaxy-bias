@@ -15,7 +15,7 @@ def number_density_evolution(theta, args):
 
 def number_density_log_priors(theta):
     z_0, k, alpha_1, alpha_2 = theta
-    if z_0 > 0 and z_0 < 3:
+    if z_0 > 0 and z_0 < 1 and k > 0 and np.abs(alpha_1) < 1 and np.abs(alpha_2) < 1:
         return 0.0
     return -np.inf
 
