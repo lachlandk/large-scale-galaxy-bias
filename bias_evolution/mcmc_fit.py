@@ -25,9 +25,8 @@ def mcmc(model, log_prior, args, start, nwalkers, ndim, total_steps, burn_in_ste
 
     try:
         print(f"Autocorrelation times: {sampler.get_autocorr_time()}")
-    except emcee.autocorr.AutocorrError:
-        pass
-
+    except emcee.autocorr.AutocorrError as error:
+        print(error)
     return flat_samples, samples
 
 
@@ -43,23 +42,48 @@ def plot_model(ax, theta, model, args, posterior, samples):
 
 
 # plot a 1D projection of the posterior distribution
-def plot_posterior_1d(ax, posterior, bins, axis=0):
-    mean = np.mean(posterior, axis=axis)
-    std = np.std(posterior, axis=axis)
+def plot_posterior_1d(ax, posterior, bins, param_index=0):
+    mean = np.mean(posterior[:,param_index])
+    std = np.std(posterior[:,param_index])
 
-    ax.hist(posterior, bins=bins, density=True)
+    ax.hist(posterior[:,param_index], bins=bins, density=True)
     ax.axvline(mean, linestyle="dashed", color="tab:orange")
     ax.axvline(mean + std, linestyle="dashed", color="tab:red")
     ax.axvline(mean - std, linestyle="dashed", color="tab:red")
 
 
+# plot a 2D projection of the posterior distribution
+def plot_posterior_2d(ax, posterior, bins, param_index_1, param_index_2):
+    height, x_edges, y_edges, _ = ax.hist2d(posterior[:,param_index_1], posterior[:,param_index_2], bins=bins, density=True, cmap="Greys")
+    
+    # contours at 0.5, 1, 1.5, and 2 sigma
+    # std = np.sqrt(np.std(posterior[:,param_index_1])**2 + np.std(posterior[:,param_index_2])**2)
+    # ax.contour(height.transpose(), 20 - np.exp(-0.5 * np.arange(0.5, 2.1, 0.5) ** 2), extent=[x_edges.min(), x_edges.max(), y_edges.min(), y_edges.max()])
+    # ax.contour(height.transpose(), (0.5, 1, 1.5, 2), extent=[x_edges.min(), x_edges.max(), y_edges.min(), y_edges.max()])
+    
+    # print(np.sum(np.sum(height[:,] * np.diff(y_edges)) * np.diff(x_edges)))
+
+    # scatter plot outside 2 sigma
+    # ax.scatter(posterior[:,param_index_1], posterior[:,param_index_2], s=1, alpha=0.5, rasterized=True)
+
+
 # plot chains
-def plot_chains(ax, chains, burn_in):
-    # for now assume chains are 1D
+def plot_chains(ax, chains, burn_in, param_index=0):
     for i in range(chains.shape[1]):
-        ax.plot(chains[:,i], alpha=0.5, rasterized=True)
+        ax.plot(chains[:,i,param_index], alpha=0.5, rasterized=True)
     ax.axvline(burn_in, linestyle="dashed", color="black")
 
 
-def plot_corner():
-    pass
+# plot the whole posterior distribution as a corner plot
+def plot_corner(axes, posterior, bins):
+    for i in range(posterior.shape[1]):
+        # diagonals
+        plot_posterior_1d(axes[i, i], posterior, bins, param_index=i)
+
+        # off-diagonals
+        for j in range(posterior.shape[1]):
+            # plot nothing above the diagonal
+            if j < i:
+                axes[j, i].set_axis_off()
+            elif j > i:
+                plot_posterior_2d(axes[j, i], posterior, 20, i, j)
