@@ -30,7 +30,7 @@ def D(z):
 # bias evolution
 # ------------------------------------------------
 def b_1_conserved_tracers(z, b_1_i):
-    return (b_1_i - 1) * D(z[0])/D(z) + 1
+    return (b_1_i - 1) * D(np.max(z))/D(z) + 1
 
 
 # sources and sinks of galaxies as a function of time
@@ -46,11 +46,11 @@ def j(z, alpha_1, alpha_2):
 def n_g(z, n_g_i, z_star, sigma_0, alpha_1, alpha_2):
     integrals = np.ndarray(z.shape[0])
     for i in range(z.shape[0]):
-        integrals[i] = integrate.quad(lambda z_: A(z_, z_star, sigma_0)*j(z_, alpha_1, alpha_2)/(1+z_), z[i], z[0])[0]
+        integrals[i] = integrate.quad(lambda z_: A(z_, z_star, sigma_0)*j(z_, alpha_1, alpha_2)/(1+z_), z[i], np.max(z))[0]
     return n_g_i + integrals
 
 
-def b_1_non_conserved_tracers(z, b_1_i, n_g_i, z_star, sigma_0, alpha_1, alpha_2):
+def b_1_non_conserved_tracers(z, n_g_i, z_star, sigma_0, alpha_1, alpha_2, b_1_i):
     # instantaneous formation bias
     def b_1_star(z):
         return 1 + alpha_2 / (alpha_1/(1+z)**3 + alpha_2)
@@ -59,8 +59,8 @@ def b_1_non_conserved_tracers(z, b_1_i, n_g_i, z_star, sigma_0, alpha_1, alpha_2
     integrals = np.ndarray(z.shape[0])
     number_density = n_g(z, n_g_i, z_star, sigma_0, alpha_1, alpha_2)
     for i in range(z.shape[0]):
-        integrals[i] = integrate.quad(lambda z_: A(z_, z_star, sigma_0)*j(z_, alpha_1, alpha_2)*(b_1_star(z_) - 1)*D(z_)/(1+z_), z[i], z[0])[0]
-    return 1 + (b_1_i - 1)*number_density[0]*D(z[0])/(number_density*D(z)) + 1/(number_density*D(z)) * integrals
+        integrals[i] = integrate.quad(lambda z_: A(z_, z_star, sigma_0)*j(z_, alpha_1, alpha_2)*(b_1_star(z_) - 1)*D(z_)/(1+z_), z[i], np.max(z))[0]
+    return 1 + (b_1_i - 1)*number_density[np.argmax(z)]*D(np.max(z))/(number_density*D(z)) + 1/(number_density*D(z)) * integrals
 
 
 if __name__ == "__main__":
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     fig, ax = plt.subplots(1, 1, layout="constrained")
     
     ax.plot(z, b_1_conserved_tracers(z, 2), label="Conserved Tracers")
-    ax.plot(z, b_1_non_conserved_tracers(z, 2, 1, 0.3, 0.2, 4, 1), label="Non-conserved Tracers")
+    ax.plot(z, b_1_non_conserved_tracers(z, 1, 0.3, 0.2, 4, 1, 2), label="Non-conserved Tracers")
     ax.invert_xaxis()
 
     ax.set_ylabel("Linear Bias $b_1$")
