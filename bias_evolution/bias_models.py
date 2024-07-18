@@ -59,12 +59,11 @@ def b_1_non_conserved_tracers(z, b_1_ref, n_g_ref, z_ref, z_0, k, alpha_1, alpha
     def b_1_star(z):
         return 1 + alpha_2 / (alpha_1/(1+z)**3 + alpha_2)
 
-
     integrals = np.ndarray(z.shape[0])
     number_density = n_g(z, n_g_ref, z_ref, z_0, k, alpha_1, alpha_2)
     for i in range(z.shape[0]):
         integrals[i] = integrate.quad(lambda z_: A(z_, z_0, k)*j(z_, alpha_1, alpha_2)*(b_1_star(z_) - 1)*D(z_)/(1+z_), z[i], z_ref)[0]
-    return 1 + (b_1_ref - 1)*number_density[z_ref]*D(z_ref)/(number_density*D(z)) + 1/(number_density*D(z)) * integrals
+    return 1 + (b_1_ref - 1)*number_density[np.where(z==z_ref)[0][0]]*D(z_ref)/(number_density*D(z)) + 1/(number_density*D(z)) * integrals
 
 
 if __name__ == "__main__":
