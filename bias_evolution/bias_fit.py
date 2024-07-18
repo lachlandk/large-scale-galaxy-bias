@@ -135,7 +135,7 @@ def fit_bias_evolution_non_conserved(catalogue, subsample, nwalkers, total_steps
     clipped_posterior = np.clip(posterior, params - 5*sigma_params, params + 5*sigma_params)
 
     # plot posterior as corner plot
-    corner_fig, axes = plt.subplots(5, 5, figsize=(10, 10), layout="constrained")
+    corner_fig, axes = plt.subplots(4, 4, figsize=(10, 10), layout="constrained")
     plot_corner(axes, clipped_posterior, 20)
     axes[3, 0].set_xlabel("$z_\\ast$")
     axes[3, 1].set_xlabel("$\\sigma_0$")
