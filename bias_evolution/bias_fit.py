@@ -29,7 +29,7 @@ def log_prior_conserved(theta):
 
 def log_prior_non_conserved(theta):
     z_star, sigma_0, alpha_1, alpha_2 = theta
-    if z_star > 0 and z_star < 3 and sigma_0 > 0 and sigma_0 < 3:
+    if z_star > 0 and z_star < 1 and sigma_0 > 0 and sigma_0 < 1 and np.abs(alpha_1) < 0.0001 and alpha_2 < 0.0001 and alpha_2 > 0:
         return 0.0
     return -np.inf
 
@@ -106,7 +106,7 @@ def fit_bias_evolution_non_conserved(catalogue, subsample, nwalkers, total_steps
             posterior = np.array(bias_save[catalogue][subsample]["posterior"])
             chains = np.array(bias_save[catalogue][subsample]["chains"])
         except (ValueError, KeyError):
-            initial = (0.3, 0.5, 0.01, -0.001)
+            initial = (0.3, 0.2, 0.00001, 0.00001)
             posterior, chains = mcmc(non_conserved_bias_evolution, log_prior_non_conserved, (z, b_1, sigma_b_1, n_g_f), initial, nwalkers, 4, total_steps, burn_in_steps)
             params = np.median(posterior, axis=0)
             sigma_params = stats.median_abs_deviation(posterior, axis=0)
@@ -181,12 +181,15 @@ if __name__ == "__main__":
     # print("Fitting bias evolution for magnitude limited sample")
     # fit_bias_evolution_conserved("magnitude_limited", ".", 32, 5000, 100)
 
+    print("Fitting bias evolution for constant number density sample")
+    fit_bias_evolution_non_conserved("const_number_density", ".", 256, 20000, 2000)
+
     print("Fitting bias evolution for constant stellar mass (high) sample")
-    fit_bias_evolution_non_conserved("const_stellar_mass", "11.5<m<inf", 256, 10000, 1000)
+    fit_bias_evolution_non_conserved("const_stellar_mass", "11.5<m<inf", 256, 20000, 2000)
     print("Fitting bias evolution for constant stellar mass (medium) sample")
-    fit_bias_evolution_non_conserved("const_stellar_mass", "11<m<11.5", 256, 10000, 1000)
+    fit_bias_evolution_non_conserved("const_stellar_mass", "11<m<11.5", 256, 20000, 2000)
     print("Fitting bias evolution for constant stellar mass (low) sample")
-    fit_bias_evolution_non_conserved("const_stellar_mass", "10.5<m<11", 256, 10000, 1000)
+    fit_bias_evolution_non_conserved("const_stellar_mass", "10.5<m<11", 256, 20000, 2000)
 
     print("Fitting bias evolution for magnitude limited sample")
-    fit_bias_evolution_non_conserved("magnitude_limited", ".", 256, 10000, 1000)
+    fit_bias_evolution_non_conserved("magnitude_limited", ".", 256, 20000, 2000)
