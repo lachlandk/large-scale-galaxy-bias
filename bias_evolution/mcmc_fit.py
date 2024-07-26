@@ -1,5 +1,9 @@
+import os
 import emcee
 import numpy as np
+import multiprocessing
+
+os.environ["OMP_NUM_THREADS"] = "1"
 
 
 # log of the likelihood function
@@ -10,15 +14,19 @@ def log_likelihood(theta, model, args):
 
 # log of the posterior function
 def log_posterior(theta, model, log_prior, args):
-    return log_prior(theta) + log_likelihood(theta, model, args)
+    lp = log_prior(theta)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + log_likelihood(theta, model, args)
 
 
 # sample posterior distribution and return samples and chains
 def mcmc(model, log_prior, args, start, nwalkers, ndim, total_steps, burn_in_steps):
-    initial = start + 0.1 * np.random.default_rng().random((nwalkers, ndim))
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, log_posterior, args=(model, log_prior, args))
+    with multiprocessing.Pool() as pool:
+        initial = start + 0.1 * np.array(start) * np.random.default_rng().random((nwalkers, ndim))
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, log_posterior, args=(model, log_prior, args), moves=emcee.moves.DEMove(), pool=pool)
 
-    sampler.run_mcmc(initial, total_steps, progress=True)
+        sampler.run_mcmc(initial, total_steps, progress=True)
 
     samples = sampler.get_chain()
     flat_samples = sampler.get_chain(discard=burn_in_steps, flat=True)
@@ -33,12 +41,13 @@ def mcmc(model, log_prior, args, start, nwalkers, ndim, total_steps, burn_in_ste
 # plot the data with the optimal model and samples from the posterior distribution overlaid
 def plot_model(ax, theta, model, args, posterior, samples):
     x, y, *_ = args
+    x_smooth = np.linspace(x[0], x[-1], 100)
     ax.plot(x, y)
-    ax.plot(x, model(theta, args))
+    ax.plot(x_smooth, model(theta, (x_smooth, *args[1:])))
 
     indices = np.random.default_rng().integers(posterior.shape[0], size=samples)
     for i in indices:
-        ax.plot(x, model(posterior[i], args), alpha=0.1)
+        ax.plot(x_smooth, model(posterior[i], (x_smooth, *args[1:])), alpha=0.1)
 
 
 # plot a 1D projection of the posterior distribution
