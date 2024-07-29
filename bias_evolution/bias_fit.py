@@ -132,11 +132,11 @@ def fit_bias_evolution_non_conserved(catalogue, subsample, nwalkers, total_steps
     ax.annotate(f"$\\alpha_2={params[3]}\\pm{sigma_params[3]}$", (0.05, 0.8), xycoords="axes fraction", fontsize=15)
     
     # clip posterior distribution to ignore outliers in corner plot
-    clipped_posterior = np.clip(posterior, params - 5*sigma_params, params + 5*sigma_params)
+    # clipped_posterior = np.clip(posterior, params - 5*sigma_params, params + 5*sigma_params)
 
     # plot posterior as corner plot
     corner_fig, axes = plt.subplots(4, 4, figsize=(10, 10), layout="constrained")
-    plot_corner(axes, clipped_posterior, 20)
+    plot_corner(axes, posterior, 20)
     axes[3, 0].set_xlabel("$z_\\ast$")
     axes[3, 1].set_xlabel("$\\sigma_0$")
     axes[3, 2].set_xlabel("$\\alpha_1$")
@@ -182,14 +182,14 @@ if __name__ == "__main__":
     # fit_bias_evolution_conserved("magnitude_limited", ".", 32, 5000, 100)
 
     print("Fitting bias evolution for constant number density sample")
-    fit_bias_evolution_non_conserved("const_number_density", ".", 256, 20000, 2000)
+    fit_bias_evolution_non_conserved("const_number_density", ".", 256, 10000, 1000)
 
     print("Fitting bias evolution for constant stellar mass (high) sample")
-    fit_bias_evolution_non_conserved("const_stellar_mass", "11.5<m<inf", 256, 20000, 2000)
+    fit_bias_evolution_non_conserved("const_stellar_mass", "11.5<m<inf", 256, 10000, 1000)
     print("Fitting bias evolution for constant stellar mass (medium) sample")
-    fit_bias_evolution_non_conserved("const_stellar_mass", "11<m<11.5", 256, 20000, 2000)
+    fit_bias_evolution_non_conserved("const_stellar_mass", "11<m<11.5", 256, 10000, 1000)
     print("Fitting bias evolution for constant stellar mass (low) sample")
-    fit_bias_evolution_non_conserved("const_stellar_mass", "10.5<m<11", 256, 20000, 2000)
+    fit_bias_evolution_non_conserved("const_stellar_mass", "10.5<m<11", 256, 10000, 1000)
 
     print("Fitting bias evolution for magnitude limited sample")
-    fit_bias_evolution_non_conserved("magnitude_limited", ".", 256, 20000, 2000)
+    fit_bias_evolution_non_conserved("magnitude_limited", ".", 256, 10000, 1000)
