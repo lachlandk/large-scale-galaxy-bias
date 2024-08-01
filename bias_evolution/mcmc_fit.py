@@ -42,12 +42,12 @@ def mcmc(model, log_prior, args, start, nwalkers, ndim, total_steps, burn_in_ste
 def plot_model(ax, theta, model, args, posterior, samples):
     x, y, *_ = args
     x_smooth = np.linspace(x[0], x[-1], 100)
-    ax.plot(x, y)
-    ax.plot(x_smooth, model(theta, (x_smooth, *args[1:])))
+    ax.plot(x, y, rasterized=True)
+    ax.plot(x_smooth, model(theta, (x_smooth, *args[1:])), rasterized=True)
 
     indices = np.random.default_rng().integers(posterior.shape[0], size=samples)
     for i in indices:
-        ax.plot(x_smooth, model(posterior[i], (x_smooth, *args[1:])), alpha=0.1)
+        ax.plot(x_smooth, model(posterior[i], (x_smooth, *args[1:])), alpha=0.1, rasterized=True)
 
 
 # plot a 1D projection of the posterior distribution

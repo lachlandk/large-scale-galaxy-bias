@@ -3,8 +3,8 @@ import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
 
-from bias_models import b_1_conserved_tracers, b_1_non_conserved_tracers
 from mcmc_fit import mcmc, plot_model, plot_posterior_1d, plot_chains, plot_corner
+from bias_models import b_1_conserved_tracers, b_1_non_conserved_tracers, n_g as number_density
 
 
 def conserved_bias_evolution(theta, args):
@@ -17,6 +17,12 @@ def non_conserved_bias_evolution(theta, args):
     z_0, k, alpha_1, alpha_2 = theta
     z, b_1, _, n_g_f = args
     return b_1_non_conserved_tracers(z, b_1[np.argmin(z)], n_g_f, np.min(z), z_0, k, alpha_1, alpha_2)
+
+
+def number_density_evolution(theta, args):
+    z_star, sigma_0, alpha_1, alpha_2 = theta
+    z, n_g, _ = args
+    return number_density(z, n_g[np.argmin(z)], np.min(z), z_star, sigma_0, alpha_1, alpha_2)
 
 
 def log_prior_conserved(theta):
@@ -131,11 +137,11 @@ def fit_bias_evolution_non_conserved(catalogue, subsample, nwalkers, total_steps
     ax.annotate(f"$\\alpha_2={params[3]}\\pm{sigma_params[3]}$", (0.05, 0.8), xycoords="axes fraction", fontsize=15)
     
     # clip posterior distribution to ignore outliers in corner plot
-    clipped_posterior = np.clip(posterior, params - 5*sigma_params, params + 5*sigma_params)
+    # clipped_posterior = np.clip(posterior, params - 5*sigma_params, params + 5*sigma_params)
 
     # plot posterior as corner plot
     corner_fig, axes = plt.subplots(4, 4, figsize=(10, 10), layout="constrained")
-    plot_corner(axes, clipped_posterior, 20)
+    plot_corner(axes, posterior, 20)
     axes[3, 0].set_xlabel("$z_0$")
     axes[3, 1].set_xlabel("$k$")
     axes[3, 2].set_xlabel("$\\alpha_1$")
@@ -166,6 +172,38 @@ def fit_bias_evolution_non_conserved(catalogue, subsample, nwalkers, total_steps
         chains_fig.savefig(f"bias_evolution/bias_evolution_non_conserved_{catalogue}_{subsample.replace('<', '_lt_').replace('.', '_')}_chains.pdf")
 
 
+def plot_number_density_evolution(catalogue, subsample):
+    # load measured number density values
+    with h5py.File(f"number_density/number_density_{catalogue}.hdf5", "r") as measured_number_density:
+        z = np.array(measured_number_density[subsample]["z"])
+        n_g = np.array(measured_number_density[subsample]["n_g"])
+        sigma_n_g = np.array(measured_number_density[subsample]["sigma"])
+
+    # load optimal parameters
+    with h5py.File(f"bias_evolution/bias_evolution_non_conserved.hdf5", "a") as bias_save:
+        params = np.array(bias_save[catalogue][subsample]["params"])
+        sigma_params = np.array(bias_save[catalogue][subsample]["sigma_params"])
+        posterior = np.array(bias_save[catalogue][subsample]["posterior"])
+
+    # plots
+    model_fig, ax = plt.subplots(1, 1, figsize=(10, 10), layout="constrained")
+    plot_model(ax, params, number_density_evolution, (z, n_g, sigma_n_g), posterior, 50)
+    ax.fill_between(z, n_g - sigma_n_g, n_g + sigma_n_g, alpha=0.2)
+    ax.invert_xaxis()
+    ax.set_xlabel("$z$")
+    ax.set_ylabel("$n_g$")
+    model_fig.suptitle(f"Number density evolution: {catalogue}/{subsample}")
+    ax.annotate(f"$z_\\ast={params[0]}\\pm{sigma_params[0]}$", (0.05, 0.95), xycoords="axes fraction", fontsize=15)
+    ax.annotate(f"$\\sigma_0={params[1]}\\pm{sigma_params[1]}$", (0.05, 0.9), xycoords="axes fraction", fontsize=15)
+    ax.annotate(f"$\\alpha_1={params[2]}\\pm{sigma_params[2]}$", (0.05, 0.85), xycoords="axes fraction", fontsize=15)
+    ax.annotate(f"$\\alpha_2={params[3]}\\pm{sigma_params[3]}$", (0.05, 0.8), xycoords="axes fraction", fontsize=15)
+
+    if subsample == ".":
+        model_fig.savefig(f"bias_evolution/number_density_evolution_{catalogue}.pdf")
+    else:
+        model_fig.savefig(f"bias_evolution/number_density_evolution_{catalogue}_{subsample.replace('<', '_lt_').replace('.', '_')}.pdf")
+
+
 if __name__ == "__main__":
     # print("Fitting bias evolution for constant number density sample")
     # fit_bias_evolution_conserved("const_number_density", ".", 32, 5000, 100)
@@ -181,14 +219,19 @@ if __name__ == "__main__":
     # fit_bias_evolution_conserved("magnitude_limited", ".", 32, 5000, 100)
 
     print("Fitting bias evolution for constant number density sample")
-    fit_bias_evolution_non_conserved("const_number_density", ".", 256, 20000, 2000)
+    fit_bias_evolution_non_conserved("const_number_density", ".", 256, 10000, 1000)
+    plot_number_density_evolution("const_number_density", ".")
 
     print("Fitting bias evolution for constant stellar mass (high) sample")
-    fit_bias_evolution_non_conserved("const_stellar_mass", "11.5<m<inf", 256, 20000, 2000)
+    fit_bias_evolution_non_conserved("const_stellar_mass", "11.5<m<inf", 256, 10000, 1000)
+    plot_number_density_evolution("const_stellar_mass", "11.5<m<inf")
     print("Fitting bias evolution for constant stellar mass (medium) sample")
-    fit_bias_evolution_non_conserved("const_stellar_mass", "11<m<11.5", 256, 20000, 2000)
+    fit_bias_evolution_non_conserved("const_stellar_mass", "11<m<11.5", 256, 10000, 1000)
+    plot_number_density_evolution("const_stellar_mass", "11<m<11.5")
     print("Fitting bias evolution for constant stellar mass (low) sample")
-    fit_bias_evolution_non_conserved("const_stellar_mass", "10.5<m<11", 256, 20000, 2000)
+    fit_bias_evolution_non_conserved("const_stellar_mass", "10.5<m<11", 256, 10000, 1000)
+    plot_number_density_evolution("const_stellar_mass", "10.5<m<11")
 
     print("Fitting bias evolution for magnitude limited sample")
-    fit_bias_evolution_non_conserved("magnitude_limited", ".", 256, 20000, 2000)
+    fit_bias_evolution_non_conserved("magnitude_limited", ".", 256, 10000, 1000)
+    plot_number_density_evolution("magnitude_limited", ".")
