@@ -1,60 +1,83 @@
-# %%
 import sys
 import h5py
 import numpy as np
 import healpy as hp
 import numba as nb
+import ctypes
 from tqdm import trange
 from ispice import ispice
+from scipy import integrate
 from datetime import datetime
 import matplotlib.pyplot as plt
-from scipy import LowLevelCallable
-from scipy.interpolate import CubicSpline
-from scipy.integrate import tplquad, nquad
 from Corrfunc.mocks.DDsmu_mocks import DDsmu_mocks
 
 # cosmological parameters
 h = 0.6774
 
+
 # helper functions
-def mu_lim(r_1, s, mu):
+@nb.cfunc(nb.types.double(nb.types.double, nb.types.double, nb.types.double))
+def mu_star(r_1, s, mu):
     return (-s + s*mu**2 + mu*np.sqrt(s**2 * mu**2 - s**2 + 4*r_1**2))/(2*r_1)
 
 
-@nb.cfunc(nb.types.double(nb.types.double, nb.types.CPointer(nb.types.double), nb.types.CPointer(nb.types.double), nb.types.intc))
-def linear_interp(x, _points, _values, n):
-    points = nb.carray(_points, n)
-    values = nb.carray(_values, n)
-    i = 0
-    while x < points[i]: i += 1
-    return values[i] + (x - points[i]) * (values[i+1] - values[i])/(points[i+1] - points[i])
+@nb.cfunc(nb.types.UniTuple(nb.types.double, 2)(nb.types.double, nb.types.double, nb.types.double, nb.types.double, nb.types.CPointer(nb.types.double), nb.types.CPointer(nb.types.double), nb.types.CPointer(nb.types.double), nb.types.CPointer(nb.types.double)))
+def mu_lim(s, r_1, mu_min, mu_max, r_data, p_data, theta_data, w_data):
+    return (mu_star(r_1, s, mu_min), mu_star(r_1, s, mu_max))
 
 
-def make_integrand(w_theta, p_r):
-    @nb.cfunc()
-    def integrand(mu, s, r_1):
-            w_theta = CubicSpline(np.flip(w_theta_data[:,0]), np.flip(w_theta_data[:,2]))
-            p_1 = CubicSpline(p_r_data[:,0], p_r_data[:,1])
-            p_2 = CubicSpline(p_r_data[:,0], p_r_data[:,1])
+@nb.cfunc(nb.types.double(nb.types.double, nb.types.double, nb.types.double))
+def r_2(r_1, s, mu):
+    return r_1*np.sqrt(1 + 2*mu*s/r_1 + s**2/r_1**2)
 
-            def phi(r_1, r_2, s):
-                return np.arccos((r_1**2 + r_1**2 - s**2)/(2*r_1*r_2))
 
-            def r_2(r_1, s, mu):
-                return r_1*np.sqrt(1 + 2*mu*s/r_1 + s**2/r_1**2)
-            
-            return s**2/r_2(r_1, s, mu)**2 * w_theta(phi(r_1, r_2(r_1, s, mu), s)) * p_1(r_1) * p_2(r_2(r_1, s, mu))
+@nb.cfunc(nb.types.double(nb.types.double, nb.types.double, nb.types.double))
+def theta(r_1, r_2, s):
+    return np.arccos((r_1**2 + r_1**2 - s**2)/(2*r_1*r_2))
+
+
+# create a linear interpolation between a set of points
+@nb.cfunc(nb.types.double(nb.types.double, nb.types.CPointer(nb.types.double), nb.types.CPointer(nb.types.double)))
+def linear_interp(x, x_data, y_data):
+    # assume x is inside the interval [x_data[0], x_data[-1]]
     
-    return integrand
+    # find with subinterval contains x
+    i = 1
+    while x_data[i] < x: 
+        i += 1
 
+    # linearly interpolate to approximate the y value
+    return (y_data[i-1]*(x_data[i] - x) + y_data[i]*(x - x_data[i-1]))/(x_data[i] - x_data[i-1])
+
+
+@nb.cfunc(nb.types.double(nb.types.double, nb.types.double, nb.types.double, nb.types.double, nb.types.double, nb.types.CPointer(nb.types.double), nb.types.CPointer(nb.types.double), nb.types.CPointer(nb.types.double), nb.types.CPointer(nb.types.double)))
+def integrand(mu, s, r_1, mu_min, mu_max, r_data, p_data, theta_data, w_data):
+    _r_2 = r_2(r_1, s, mu)
+    _theta = theta(r_1, _r_2, s)
+    print(r_data[0], p_data[0])
+    print(r_data[1], p_data[1])
+    print(r_data[2], p_data[2])
+    print(r_data[3], p_data[3])
+    print(r_data[4], p_data[4])
+    print(r_data[5], p_data[5])
+    print(r_data[6], p_data[6])
+    print(r_data[7], p_data[7])
+    print(r_data[8], p_data[8])
+    print(r_data[9], p_data[9])
+    raise Exception
+    p_1 = linear_interp(r_1, r_data, p_data)
+    print(r_1, p_1)
+    p_2 = linear_interp(_r_2, r_data, p_data)
+    w = linear_interp(_theta, theta_data, w_data)
+    # return s**2/_r_2**2 * w * p_1 * p_2
+    return p_1
 
 
 def RR_integral(s_bins):
     mu_bins = np.linspace(0, 1, 2)
 
-    w_theta_data = np.loadtxt("correlation_functions/corr_R.txt")
-    
     p_r_data = np.loadtxt("correlation_functions/dndr.txt")
+    w_theta_data = np.loadtxt("correlation_functions/dndr.txt")
     
     W = 0.125
     r_min = np.min(p_r_data[0, 0])
@@ -63,42 +86,57 @@ def RR_integral(s_bins):
     # integrals = np.ndarray((len(s_bins) - 1, len(mu_bins) - 1))
     integrals = np.ndarray(len(s_bins) - 1)
     
-    
     for i in trange(len(s_bins) - 1):
-        integrals[i] = nquad(integrand, ((-1, 1), (s_bins[i], s_bins[i+1]), (r_min, r_max)), opts={"epsabs": 1e-3, "epsrel": 1e-3})[0]
+        integral = integrate.nquad(integrand, (mu_lim, (s_bins[i], s_bins[i+1]), (r_min, r_max)), args=(0, 1, p_r_data[:,0].ctypes.data_as(ctypes.POINTER(ctypes.c_double)), p_r_data[:,1].ctypes.data_as(ctypes.POINTER(ctypes.c_double)), w_theta_data[:,0].ctypes.data_as(ctypes.POINTER(ctypes.c_double)), w_theta_data[:,1].ctypes.data_as(ctypes.POINTER(ctypes.c_double))))#, opts={"epsabs": 1e-3, "epsrel": 1e-3})
+        # print(integral)
+        integrals[i] = integral[0]
         # for j in range(len(mu_bins) - 1):
             # mu_limits = lambda s, r_1: (mu_lim(r_1, s, mu_bins[j]), mu_lim(r_1, s, mu_bins[j+1]))
 
             # integrals[i, j] = nquad(integrand, ((-1, 1), (s_bins[i], s_bins[i+1]), (r_min, r_max)), opts={"epsabs": 1e-3, "epsrel": 1e-3})[0]
-            # integrals[i, j] = tplquad(integrand, r_min, r_max, s_min, s_max, mu_min, mu_max, epsabs=1e-5, epsrel=1e-5)[0] / (2*W**2)
-    integrals *= 1/(4*W**2)
-    np.savetxt("correlation_functions/RR_anal_test.txt")
+
+    integrals *= 0.5 / W**2
+    np.savetxt("correlation_functions/RR_anal_test.txt", integrals)
 
 
+# find dn/dr, the radial selection function
 def radial_distribution(data_catalogue):
     start_time = datetime.now()
     
+    distances = []
     print("Calculating radial distribution...")
-    with h5py.File(f"catalogues/{data_catalogue}", "r") as catalogue:
+
+    # load distances
+    with h5py.File(f"catalogues/{data_catalogue}.hdf5", "r") as catalogue:
         for z_bin in catalogue:
-            dist = np.array(catalogue[z_bin]["Pos"])[:,2]/h
-            print(f"Galaxies in bin {z_bin}: {dist.shape[0]}")
+            distances.append(np.array(catalogue[z_bin]["ObsDist"]))  # [cMpc]
+            print(f"Galaxies in bin {z_bin}: {distances[-1].shape[0]}")
 
-            p, bins = np.histogram(dist, bins="fd", density=True)
+    with h5py.File(f"catalogues/number_density_{'_'.join(data_catalogue.split('_')[:-1])}.hdf5", "r") as catalogue_number_density:
+        z = np.array(catalogue_number_density["z"])
 
-            fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-            fig.suptitle("Radial Distribution Function")
+    # plot of galaxy radial distribution
+    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    fig.suptitle(f"Radial Distribution Function: {data_catalogue}")
 
-            x = np.linspace(np.min(bins), np.max(bins), 1000)
-            ax.plot(x, [linear_interp(x_i, bins[:-1].ctypes.data, p.ctypes.data, p.shape[0]) for x_i in x])
-            
-            ax.scatter(bins[:-1], p)
-            ax.set_xlabel("$r$")
-            ax.set_ylabel("$p(r)$")
+    for dists in distances:
+            bin_number = 10
+            # this is not really p
+            p, bins = np.histogram(dists, bins=bin_number, density=False)
+            interp_points = np.linspace(np.min(dists), np.max(dists), bin_number)
 
-            fig.savefig("correlation_functions/test_radial_distribution.png")
+            r = np.linspace(np.min(bins), np.max(bins), 1000)
+            interp = [linear_interp(r_i, interp_points.ctypes.data_as(ctypes.POINTER(ctypes.c_double)), p.astype("float64").ctypes.data_as(ctypes.POINTER(ctypes.c_double))) for r_i in r]
 
-            np.savetxt("correlation_functions/dndr.txt", np.transpose([bins[:-1], p]))
+            ax.scatter(interp_points, p)
+            ax.plot(r, interp)
+
+    ax.set_xlabel("$r$ (Observed distance, [cMpc])")
+    ax.set_ylabel("Number of Galaxies")
+
+    fig.savefig(f"correlation_functions/test_radial_distribution_{data_catalogue}.png")
+
+    # np.savetxt("correlation_functions/dndr.txt", np.transpose([bins[:-1], p]))
     print(f"Done calculating radial distribution, time elapsed: {datetime.now() - start_time}")  
 
 
@@ -176,8 +214,6 @@ def angular_correlation_function(data_catalogue, save_name=None):
                 fig.savefig("correlation_functions/test_corrfunc_spice.png")
                 
     print(f"Bruh, elapsed time: {datetime.now() - start_time}")
-    
-
 
 
 def correlation_function(data_catalogue, random_catalogue, s_bins, rsd=True, save_name=None, test=False):
@@ -334,7 +370,10 @@ def correlation_function(data_catalogue, random_catalogue, s_bins, rsd=True, sav
 if __name__ == "__main__":
     s = np.linspace(0.1, 200, 101)
 
-    radial_distribution("data_bose_r_19_A.hdf5")
+    radial_distribution("magnitude_limited_A")
+    # radial_distribution("const_number_density_A")
+
+    # RR_integral(s)
 
     # xi_A, z_bins = correlation_function("random_bose_r_19_A_small.hdf5", "random_bose_r_19_A.hdf5", s, rsd=False)
     # # xi_B, z_bins = correlation_function("data_bose_r_19_B.hdf5", "random_bose_r_19_B.hdf5", s, rsd=False)
@@ -361,6 +400,3 @@ if __name__ == "__main__":
     # fig.savefig("correlation_functions/test_corrfunc.png")
 
     # angular_correlation_function("data_bose_r_19_A.hdf5")
-
-
-# %%
