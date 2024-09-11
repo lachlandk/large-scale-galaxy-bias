@@ -46,14 +46,22 @@ if __name__ == "__main__":
             number_density_full.append(subsamples)
 
             # calculate W for each bin
-            catalogue[z_bin].attrs["W"] = W(ra_lims[0], ra_lims[1], dec_lims[0], dec_lims[1])
+            W_val = W(ra_lims[0], ra_lims[1], dec_lims[0], dec_lims[1])
+            catalogue[z_bin].attrs["W"] = W_val
+
+            # calculate dn_g/dr
+            dndr = 4*np.pi*W_val*subsamples[:,0]*subsamples[:,1]**2
 
             try:
                 del catalogue[z_bin]["n_g"]
             except KeyError:
                 pass
-            finally:
-                catalogue[z_bin].create_dataset("n_g", data=subsamples)
+            try:
+                del catalogue[z_bin]["d(n_g)dr"]
+            except KeyError:
+                pass
+            catalogue[z_bin].create_dataset("n_g", data=subsamples)
+            catalogue[z_bin].create_dataset("d(n_g)dr", data=dndr)
 
     # import matplotlib.pyplot as plt
     # fig, ax = plt.subplots(1, 1, figsize=(7, 7), layout="constrained")
