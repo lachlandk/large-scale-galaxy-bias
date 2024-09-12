@@ -32,7 +32,6 @@ def W(ra_min, ra_max, dec_min, dec_max):
 if __name__ == "__main__":
     import h5py
 
-    number_density_full = []
     with h5py.File("catalogues/magnitude_limited_A_old.hdf5", "a") as catalogue_save:
         catalogue = catalogue_save["/"]
         for z_bin in catalogue:
@@ -41,37 +40,23 @@ if __name__ == "__main__":
             ra_lims = catalogue[z_bin].attrs["ra_lims"]
             dec_lims = catalogue[z_bin].attrs["dec_lims"]
 
-            # TODO: check if mean number density is equal to attribute calculated before 
-            _, _, subsamples = number_density(distances, r_lims, ra_lims, dec_lims, subregions=50)
-            number_density_full.append(subsamples)
+            _, _, subsamples = number_density(distances, r_lims, ra_lims, dec_lims, subregions=100)
 
             # calculate W for each bin
             W_val = W(ra_lims[0], ra_lims[1], dec_lims[0], dec_lims[1])
             catalogue[z_bin].attrs["W"] = W_val
 
-            # calculate dn_g/dr
-            dndr = 4*np.pi*W_val*subsamples[:,0]*subsamples[:,1]**2
+            # calculate dN/dr
+            dNdr = 4*np.pi*W_val*subsamples[:,0]*subsamples[:,1]**2
+            dNdr = dNdr / distances.shape[0]  # normalise so total number of galaxies is 1
 
             try:
                 del catalogue[z_bin]["n_g"]
             except KeyError:
                 pass
             try:
-                del catalogue[z_bin]["d(n_g)dr"]
+                del catalogue[z_bin]["dNdr"]
             except KeyError:
                 pass
             catalogue[z_bin].create_dataset("n_g", data=subsamples)
-            catalogue[z_bin].create_dataset("d(n_g)dr", data=dndr)
-
-    # import matplotlib.pyplot as plt
-    # fig, ax = plt.subplots(1, 1, figsize=(7, 7), layout="constrained")
-
-    # for z_bin in number_density_full:
-    #     dist = z_bin[:,1]
-    #     n_g = z_bin[:,0]
-    #     ax.plot(dist, n_g)
-
-    # ax.set_ylabel("Comoving galaxy number density $n_g$ [cMpc$^{-3}$]")
-    # ax.set_xlabel("Comoving distance [cMpc]")
-
-    # fig.savefig("catalogues/number_density_evolution.pdf")
+            catalogue[z_bin].create_dataset("dNdr", data=dNdr)
