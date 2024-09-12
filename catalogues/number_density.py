@@ -26,7 +26,7 @@ def number_density(distances, r_lims, ra_lims, dec_lims, subregions=10, resample
 
 # calculate normalisation constant for RR integral
 def W(ra_min, ra_max, dec_min, dec_max):
-    return 1/(4*np.pi) * integrate.dblquad(lambda _, theta: np.cos(theta), ra_min*np.pi/180, ra_max*np.pi/180, dec_min*np.pi/180, dec_max*np.pi/180)[0]
+    return 1/(4*np.pi) * integrate.dblquad(lambda theta, _: np.cos(theta), ra_min*np.pi/180, ra_max*np.pi/180, dec_min*np.pi/180, dec_max*np.pi/180)[0]
 
 
 if __name__ == "__main__":
