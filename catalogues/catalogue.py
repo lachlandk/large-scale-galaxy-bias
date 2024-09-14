@@ -10,19 +10,13 @@ import mpl_toolkits.axisartist.angle_helper as angle_helper
 from mpl_toolkits.axisartist.grid_finder import MaxNLocator
 from mpl_toolkits.axisartist.floating_axes import FloatingAxes, GridHelperCurveLinear
 
-from catalogues.postprocessing import number_density, dNdr, W
+from postprocessing import number_density, dNdr, W
 from cosmology import h, comoving_distance, z_at_comoving_distance, cosmological_redshift, observed_redshift
-
-plt.switch_backend("agg")
-plt.rcParams["axes.titlesize"] = 50
-plt.rcParams["axes.labelsize"] = 50
-plt.rcParams["xtick.labelsize"] = 40
-plt.rcParams["ytick.labelsize"] = 40
 
 
 # catalogue creation functions
 def select_galaxies(dir, num_files, catalogue_save, bin_name, z_lims=(0, 1.5), mag_lims=(-np.inf, 19.5), mass_lims=(-np.inf, np.inf), dec_lims=(0, 90), ra_lims=(0, 90)):
-    with h5py.File(f"catalogues/{catalogue_save}", "a") as file:
+    with h5py.File(f"catalogues/{catalogue_save}.hdf5", "a") as file:
         catalogue = file.create_group(bin_name)
         cat_pos = catalogue.create_dataset("Pos", (0, 3), maxshape=(None, 3), dtype="f8")
         cat_dist = catalogue.create_dataset("ObsDist", (0,), maxshape=(None,), dtype="f8")
@@ -93,7 +87,7 @@ def select_galaxies(dir, num_files, catalogue_save, bin_name, z_lims=(0, 1.5), m
 
         # calculate number density and dNdr as a function of radius
         r_lims = (comoving_distance(z_lims[0]), comoving_distance(z_lims[1]))  # observed distance
-        mean_n_g, sigma_n_g, (subdivision_n_g, subdivision_r, subdivision_z) = number_density(obs_r, r_lims, ra_lims, dec_lims, radial_subdivisions=100)
+        mean_n_g, sigma_n_g, (subdivision_n_g, subdivision_r, subdivision_z) = number_density(obs_r, r_lims, ra_lims, dec_lims, radial_subdivisions=50)
         
         subdivision_dNdr = dNdr(subdivision_n_g, subdivision_r, average_mask_value)
         
@@ -133,21 +127,29 @@ def create_random_catalogue(multiplier, data_file, data_catalogue):
         random_catalogue.create_dataset("ObsZ", (size,), data=obs_z, dtype="f8")
 
 
-def plot_catalogue(filename):
+# plot a map of a whole sample
+def plot_catalogue(file, catalogue):
+    plt.switch_backend("agg")
+    plt.rcParams["axes.titlesize"] = 50
+    plt.rcParams["axes.labelsize"] = 50
+    plt.rcParams["xtick.labelsize"] = 40
+    plt.rcParams["ytick.labelsize"] = 40
+
+    # load data from catalogue
     cat_pos = []
     cat_dist = []
     cat_mag = []
-    with h5py.File(f"catalogues/{filename}", "r") as data_file:
-        for catalogue in data_file:
-            cat_pos.append(np.array(data_file[catalogue]["Pos"]))
-            cat_dist.append(np.array(data_file[catalogue]["ObsDist"]))
-            cat_mag.append(np.array(data_file[catalogue]["ObsMag"]))
+    with h5py.File(f"catalogues/{file}.hdf5", "r") as catalogue_save:
+        for z_bin in catalogue_save[catalogue]:
+            cat_pos.append(np.array(catalogue_save[z_bin]["Pos"]))
+            cat_dist.append(np.array(catalogue_save[z_bin]["ObsDist"]))
+            cat_mag.append(np.array(catalogue_save[z_bin]["ObsMag"]))
     pos = np.concatenate(cat_pos)
     dist = np.concatenate(cat_dist)
     mag = np.concatenate(cat_mag)
     colour = np.clip(mag[:,1] - mag[:,2], 0.5, 1.2)
 
-    # plane projection
+    # plane projection (project onto the x-y plane)
     fig = plt.figure(figsize=(50, 30), layout="constrained")
     tr_scale = Affine2D().scale(np.pi/180.0, 1.0)
     transform = tr_scale + PolarAxes.PolarTransform()
@@ -198,9 +200,12 @@ def plot_catalogue(filename):
     colourbar = fig.colorbar(scatter, ax=ax2)
     colourbar.set_label("$g-r$ Colour (Observer Frame)", labelpad=15)
 
-    fig.savefig(f"catalogues/{filename.split('.')[0]}_slice.pdf")
+    if catalogue == "/":
+        fig.savefig(f"catalogues/map_{file}_slice.pdf")
+    else:
+        fig.savefig(f"catalogues/map_{file}_{catalogue.replace('<', '_lt_').replace('.', '_')}_slice.pdf")
 
-    # sky projection
+    # sky projection (project onto the surface of a sphere)
     fig = plt.figure(figsize=(25, 25), layout="constrained")
     ax3 = fig.add_subplot(111)
     ax3.set_title("Light Cone Projected onto the Sky")
@@ -222,7 +227,53 @@ def plot_catalogue(filename):
     colourbar = fig.colorbar(scatter, ax=ax3)
     colourbar.set_label("$g-r$ Colour (Observer Frame)", labelpad=15)
 
-    fig.savefig(f"catalogues/{filename.split('.')[0]}_sky.pdf")
+    if catalogue == "/":
+        fig.savefig(f"catalogues/map_{file}_sky.pdf")
+    else:
+        fig.savefig(f"catalogues/map_{file}_{catalogue.replace('<', '_lt_').replace('.', '_')}_sky.pdf")
+
+
+# plot of dNdr for a whole sample
+def plot_radial_distribution(file, catalogue):
+    plt.rcdefaults()
+
+    # load data from catalogue
+    cat_z_bins = []
+    cat_r = []
+    cat_N = []
+    cat_dNdr = []
+    max_z = 0
+    with h5py.File(f"catalogues/{file}.hdf5", "r") as catalogue_save:
+        for z_bin in catalogue_save[catalogue]:
+            cat_z_bins.append(z_bin)
+            upper_z_lim = float(z_bin.split("<")[2])
+            if upper_z_lim > max_z:
+                max_z = upper_z_lim
+            normalisation = 1/catalogue_save[catalogue][z_bin].attrs["total_galaxies"]  # normalise so that the integral of dNdr is one
+            radial_distribution = np.array(catalogue_save[catalogue][z_bin]["RadialDistribution"])
+            cat_r.append(radial_distribution[2,:])
+            cat_N.append(catalogue_save[catalogue][z_bin].attrs["total_galaxies"])
+            cat_dNdr.append(radial_distribution[1,:] * normalisation)
+
+    # plot of galaxy radial distribution
+    fig, ax = plt.subplots(1, 1, figsize=(20, 5))
+
+    for r, N, dNdr, z_bin in zip(cat_r, cat_N, cat_dNdr, cat_z_bins):
+        z_lims = z_bin.split("<")
+        ax.plot(r, dNdr, label=f"{z_bin}, N={N}")
+        ax.axvline(comoving_distance(float(z_lims[0])), c="black", alpha=0.5, linestyle="dashed")
+        if z_lims[2] == upper_z_lim:
+            ax.axvline(comoving_distance(float(z_lims[2])), c="black", alpha=0.5, linestyle="dashed")
+    ax.set_xlabel("$r$ (Observed distance, [cMpc])")
+    ax.set_ylabel("$\\frac{\\mathrm{d}N}{\\mathrm{d}r}$ [cMpc$^{-1}$]")
+    ax.legend(ncol=3)
+
+    if catalogue == "/":
+        fig.suptitle(f"Radial Distribution Function: {file}")
+        fig.savefig(f"catalogues/radial_distribution_{file}.pdf")
+    else:
+        fig.suptitle(f"Radial Distribution Function: {file}/{catalogue}")
+        fig.savefig(f"catalogues/radial_distribution_{file}_{catalogue.replace('<', '_lt_').replace('.', '_')}.pdf")
 
 
 if __name__ == "__main__":
@@ -231,7 +282,7 @@ if __name__ == "__main__":
 
     start_time = datetime.now()
     print("Creating magnitude limited sample for mapping...")  
-    total_galaxies, _, _ = select_galaxies(lightcone_dir, files, "map_0_z_1.hdf5", "map", z_lims=(0, 0.5))
+    total_galaxies, _, _ = select_galaxies(lightcone_dir, files, "magnitude_limited_0_lt_z_lt_0_5", "map", z_lims=(0, 0.5))
     print(f"Galaxies in catalogue: {total_galaxies}")
-    plot_catalogue("map_0_z_1.hdf5")
-    print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")    
+    plot_catalogue("magnitude_limited_0_lt_z_lt_0_5", "/")
+    print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
