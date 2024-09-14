@@ -3,14 +3,14 @@ import numpy as np
 from tqdm import trange
 from datetime import datetime
 import matplotlib.pyplot as plt
-import mpl_toolkits.axisartist.angle_helper as angle_helper
-from mpl_toolkits.axisartist.floating_axes import FloatingAxes, GridHelperCurveLinear
-from mpl_toolkits.axisartist.grid_finder import MaxNLocator
-from matplotlib.projections import PolarAxes
-from matplotlib.transforms import Affine2D
 from mpl_toolkits.basemap import Basemap
+from matplotlib.transforms import Affine2D
+from matplotlib.projections import PolarAxes
+import mpl_toolkits.axisartist.angle_helper as angle_helper
+from mpl_toolkits.axisartist.grid_finder import MaxNLocator
+from mpl_toolkits.axisartist.floating_axes import FloatingAxes, GridHelperCurveLinear
 
-from number_density import number_density
+from catalogues.postprocessing import number_density, dNdr, W
 from cosmology import h, comoving_distance, z_at_comoving_distance, cosmological_redshift, observed_redshift
 
 plt.switch_backend("agg")
@@ -30,7 +30,7 @@ def select_galaxies(dir, num_files, catalogue_save, bin_name, z_lims=(0, 1.5), m
         cat_obs_z = catalogue.create_dataset("ObsZ", (0,), maxshape=(None,), dtype="f8")
         cat_mag = catalogue.create_dataset("ObsMag", (0, 5), maxshape=(None, 5), dtype="f4")
         cat_mass = catalogue.create_dataset("StellarMass", (0,), maxshape=(None,), dtype="f4")
-        cat_number_density = catalogue.create_dataset("NumberDensity", (0, 3), maxshape=(None, 3), dtype="f8")
+        cat_radial_distribution = catalogue.create_dataset("RadialDistribution", (0, 4), maxshape=(None, 3), dtype="f8")
 
         # generate catalogues from data
         print("Grabbing properties from raw data...")
@@ -87,17 +87,24 @@ def select_galaxies(dir, num_files, catalogue_save, bin_name, z_lims=(0, 1.5), m
             cat_mass.resize(total_galaxies, axis=0)
             cat_mass[start_index:] = mass[data_filter][z_filter]
 
-        print("Calculating radial distribution...")
-        # calculate number density
+        # postprocessing
+        print("Postprocessing catalogue...")
+        average_mask_value = W(*ra_lims, *dec_lims)
+
+        # calculate number density and dNdr as a function of radius
         r_lims = (comoving_distance(z_lims[0]), comoving_distance(z_lims[1]))  # observed distance
-        mean_n_g, sigma_n_g, subsamples = number_density(obs_r, r_lims, ra_lims, dec_lims, subregions=50)
-        cat_number_density.resize(subsamples.shape[0], axis=0)
-        cat_number_density = subsamples
-     
+        mean_n_g, sigma_n_g, (subdivision_n_g, subdivision_r, subdivision_z) = number_density(obs_r, r_lims, ra_lims, dec_lims, radial_subdivisions=100)
+        
+        subdivision_dNdr = dNdr(subdivision_n_g, subdivision_r, average_mask_value)
+        
+        cat_radial_distribution.resize(subdivision_n_g.shape[0], axis=0)
+        cat_radial_distribution = (subdivision_n_g, subdivision_dNdr, subdivision_r, subdivision_z)
+
         median_z = np.median(cat_cos_z)
         catalogue.attrs["r_lims"] = r_lims
         catalogue.attrs["ra_lims"] = ra_lims
         catalogue.attrs["dec_lims"] = dec_lims
+        catalogue.attrs["W"] = average_mask_value
         catalogue.attrs["median_z_cos"] = median_z
         catalogue.attrs["total_galaxies"] = total_galaxies
         catalogue.attrs["mean_number_density"] = mean_n_g
