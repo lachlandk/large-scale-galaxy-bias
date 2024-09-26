@@ -30,7 +30,7 @@ def D(z):
 # bias evolution
 # ------------------------------------------------
 def b_1_conserved_tracers(z, b_1_i):
-    return (b_1_i - 1) * D(z[0])/D(z) + 1
+    return (b_1_i - 1) * D(np.max(z))/D(z) + 1
 
 
 # sources and sinks of galaxies as a function of time
@@ -43,33 +43,53 @@ def j(z, alpha_1, alpha_2):
 
 
 # comoving galaxy number density as a function of time
-def n_g(z, n_g_i, z_star, sigma_0, alpha_1, alpha_2):
+def n_g(z, n_g_ref, z_ref, z_star, sigma_0, alpha_1, alpha_2):
     integrals = np.ndarray(z.shape[0])
     for i in range(z.shape[0]):
-        integrals[i] = integrate.quad(lambda z_: A(z_, z_star, sigma_0)*j(z_, alpha_1, alpha_2)/(1+z_), z[i], z[0])[0]
-    return n_g_i + integrals
+        integrals[i] = integrate.quad(lambda z_: A(z_, z_star, sigma_0)*j(z_, alpha_1, alpha_2)/(1+z_), z[i], z_ref)[0]
+    return n_g_ref + integrals
 
 
-def b_1_non_conserved_tracers(z, b_1_i, n_g_i, z_star, sigma_0, alpha_1, alpha_2):
+def b_1_non_conserved_tracers(z, b_1_ref, n_g_ref, z_ref, z_star, sigma_0, alpha_1, alpha_2):
     # instantaneous formation bias
     def b_1_star(z):
         return 1 + alpha_2 / (alpha_1/(1+z)**3 + alpha_2)
 
-
     integrals = np.ndarray(z.shape[0])
-    number_density = n_g(z, n_g_i, z_star, sigma_0, alpha_1, alpha_2)
+    number_density = n_g(z, n_g_ref, z_ref, z_star, sigma_0, alpha_1, alpha_2)
     for i in range(z.shape[0]):
-        integrals[i] = integrate.quad(lambda z_: A(z_, z_star, sigma_0)*j(z_, alpha_1, alpha_2)*(b_1_star(z_) - 1)*D(z_)/(1+z_), z[i], z[0])[0]
-    return 1 + (b_1_i - 1)*number_density[0]*D(z[0])/(number_density*D(z)) + 1/(number_density*D(z)) * integrals
+        integrals[i] = integrate.quad(lambda z_: A(z_, z_star, sigma_0)*j(z_, alpha_1, alpha_2)*(b_1_star(z_) - 1)*D(z_)/(1+z_), z[i], z_ref)[0]
+    return 1 + (b_1_ref - 1)*number_density[np.where(z==z_ref)[0][0]]*D(z_ref)/(number_density*D(z)) + 1/(number_density*D(z)) * integrals
 
 
 if __name__ == "__main__":
+    import h5py
+
+    with h5py.File("bias_evolution/number_density_evolution.hdf5", "r") as number_density_save:
+        z_star, sigma_0, alpha_1, alpha_2 = np.array(number_density_save["const_stellar_mass/11.5<m<inf/params"])
+
+    with h5py.File("number_density/number_density_const_stellar_mass.hdf5", "r") as number_density_save:
+        z = np.array(number_density_save["11.5<m<inf/z"])
+        n_g_i = number_density_save["11.5<m<inf/n_g"][-1]
+        n_g_f = number_density_save["11.5<m<inf/n_g"][0]
+
+    with h5py.File("bias_evolution/bias_measurements.hdf5", "r") as bias_save:
+        b_1_i = bias_save["const_stellar_mass/11.5<m<inf/b_1"][-1]
+        b_1_f = bias_save["const_stellar_mass/11.5<m<inf/b_1"][0]
+
     z = np.linspace(1, 0, 100)
 
     fig, ax = plt.subplots(1, 1, layout="constrained")
     
     ax.plot(z, b_1_conserved_tracers(z, 2), label="Conserved Tracers")
-    ax.plot(z, b_1_non_conserved_tracers(z, 2, 1, 0.3, 0.2, 4, 1), label="Non-conserved Tracers")
+    ax.plot(z, b_1_non_conserved_tracers(z, 2, 1, 1, 0.3, 0.2, 4, 1), label="Non-conserved Tracers")
+
+    # ax.plot(z, n_g(z, n_g_i, np.max(z), z_star, sigma_0, alpha_1, alpha_2), label="Past-anchored")
+    # ax.plot(z, n_g(z, n_g_f, np.min(z), z_star, sigma_0, alpha_1, alpha_2), label="Present-anchored", linestyle="dashed")
+
+    # ax.plot(z, b_1_non_conserved_tracers(z, b_1_i, n_g_i, np.max(z), z_star, sigma_0, alpha_1, alpha_2), label="Past-anchored")
+    # ax.plot(z, b_1_non_conserved_tracers(z, b_1_f, n_g_f, np.min(z), z_star, sigma_0, alpha_1, alpha_2), label="Present-anchored", linestyle="dashed")
+
     ax.invert_xaxis()
 
     ax.set_ylabel("Linear Bias $b_1$")

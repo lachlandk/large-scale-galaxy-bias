@@ -1,6 +1,7 @@
 basemap
 colossus
 corrfunc
+emcee
 h5py
 healpy
 matplotlib
