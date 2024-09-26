@@ -49,7 +49,7 @@ def cosmological_redshift(obs_z, v_r):
 
 # 4pi * fraction of the sky included in the input region
 def sky_fraction(ra_min, ra_max, dec_min, dec_max):
-    return integrate.dblquad(lambda _, theta: np.cos(theta), ra_min*np.pi/180, ra_max*np.pi/180, dec_min*np.pi/180, dec_max*np.pi/180)[0]
+    return integrate.dblquad(lambda theta, _: np.cos(theta), ra_min*np.pi/180, ra_max*np.pi/180, dec_min*np.pi/180, dec_max*np.pi/180)[0]
 
 
 # volume of part of a spherical shell between some radii and angles

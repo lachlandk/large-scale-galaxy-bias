@@ -10,8 +10,7 @@ import mpl_toolkits.axisartist.angle_helper as angle_helper
 from mpl_toolkits.axisartist.grid_finder import MaxNLocator
 from mpl_toolkits.axisartist.floating_axes import FloatingAxes, GridHelperCurveLinear
 
-from postprocessing import number_density, dNdr, W
-from cosmology import h, comoving_distance, z_at_comoving_distance, cosmological_redshift, observed_redshift
+from cosmology import h, comoving_distance, z_at_comoving_distance, cosmological_redshift, observed_redshift, volume
 
 
 # catalogue creation functions
@@ -24,7 +23,6 @@ def select_galaxies(dir, num_files, catalogue_save, bin_name, z_lims=(0, 1.5), m
         cat_obs_z = catalogue.create_dataset("ObsZ", (0,), maxshape=(None,), dtype="f8")
         cat_mag = catalogue.create_dataset("ObsMag", (0, 5), maxshape=(None, 5), dtype="f4")
         cat_mass = catalogue.create_dataset("StellarMass", (0,), maxshape=(None,), dtype="f4")
-        cat_radial_distribution = catalogue.create_dataset("RadialDistribution", (0, 4), maxshape=(None, 3), dtype="f8")
 
         # generate catalogues from data
         print("Grabbing properties from raw data...")
@@ -81,29 +79,19 @@ def select_galaxies(dir, num_files, catalogue_save, bin_name, z_lims=(0, 1.5), m
             cat_mass.resize(total_galaxies, axis=0)
             cat_mass[start_index:] = mass[data_filter][z_filter]
 
-        # postprocessing
-        print("Postprocessing catalogue...")
-        average_mask_value = W(*ra_lims, *dec_lims)
-
-        # calculate number density and dNdr as a function of radius
         r_lims = (comoving_distance(z_lims[0]), comoving_distance(z_lims[1]))  # observed distance
-        mean_n_g, sigma_n_g, (subdivision_n_g, subdivision_r, subdivision_z) = number_density(obs_r, r_lims, ra_lims, dec_lims, radial_subdivisions=50)
-        
-        subdivision_dNdr = dNdr(subdivision_n_g, subdivision_r, average_mask_value)
-        
-        cat_radial_distribution.resize(subdivision_n_g.shape[0], axis=0)
-        cat_radial_distribution = (subdivision_n_g, subdivision_dNdr, subdivision_r, subdivision_z)
+        median_cos_z = np.median(cat_cos_z)
+        median_obs_z = np.median(cat_obs_z)
+        n_g = 3 * total_galaxies / volume(*r_lims, *ra_lims, *dec_lims)
 
-        median_z = np.median(cat_cos_z)
         catalogue.attrs["r_lims"] = r_lims
         catalogue.attrs["ra_lims"] = ra_lims
         catalogue.attrs["dec_lims"] = dec_lims
-        catalogue.attrs["W"] = average_mask_value
-        catalogue.attrs["median_z_cos"] = median_z
+        catalogue.attrs["median_z_cos"] = median_cos_z
+        catalogue.attrs["median_z_obs"] = median_obs_z
         catalogue.attrs["total_galaxies"] = total_galaxies
-        catalogue.attrs["mean_number_density"] = mean_n_g
-        catalogue.attrs["sigma_number_density"] = sigma_n_g
-    return total_galaxies, mean_n_g, median_z
+        catalogue.attrs["n_g"] = n_g
+    return total_galaxies, n_g, median_cos_z
 
 
 def create_random_catalogue(multiplier, data_file, data_catalogue):
