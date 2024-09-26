@@ -3,7 +3,9 @@ colossus
 corrfunc
 emcee
 h5py
+healpy
 matplotlib
+numba
 numpy
 scipy
 tqdm
