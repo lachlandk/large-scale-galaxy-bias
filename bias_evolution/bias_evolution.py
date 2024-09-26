@@ -35,8 +35,8 @@ def compute_bias(s, xi, sigma, z, resamples):
     return bias_fit.x[0], np.std(resampled_bias), norm_residuals(bias_fit.x[0], s, xi, sigma, z)
 
 
-def bias_evolution(file, catalogue, resamples):
-    with h5py.File(f"bias_evolution/bias_{file}.hdf5", "a") as bias_save:
+def bias_evolution(file, catalogue, resamples=1000):
+    with h5py.File(f"bias_evolution/{file}.hdf5", "a") as bias_save:
         try:
             bias = np.array(bias_save[catalogue]["b_1"])
             z = np.array(bias_save[catalogue]["z"])
@@ -47,14 +47,14 @@ def bias_evolution(file, catalogue, resamples):
             bias = []
             sigma_b = []
             residuals = []
-            with h5py.File(f"correlation_functions/corrfunc_{file}.hdf5", "r") as corrfunc:
+            with h5py.File(f"correlation_functions/{file}.hdf5", "r") as corrfunc:
                 for i, z_bin in enumerate(corrfunc[catalogue]):
                     low_z = float(z_bin.split("<")[0])
                     high_z = float(z_bin.split("<")[2])
                     s = np.array(corrfunc[catalogue][f"{low_z}<z<{high_z}"]["s"])
                     xi = np.array(corrfunc[catalogue][f"{low_z}<z<{high_z}"]["xi_0"])
                     sigma_xi = np.array(corrfunc[catalogue][f"{low_z}<z<{high_z}"]["sigma"])
-                    median_z = corrfunc[catalogue][f"{low_z}<z<{high_z}"].attrs["median_z_cos"]
+                    median_z = corrfunc[catalogue][f"{low_z}<z<{high_z}"].attrs["median_z"]
 
                     b_1, sigma_b_1, xi_residuals = compute_bias(s, xi, sigma_xi, median_z, resamples)
 
@@ -78,24 +78,33 @@ def bias_evolution(file, catalogue, resamples):
             group.create_dataset("sigma", data=sigma_b)
             group.create_dataset("residuals", data=residuals)
 
-    # plot of linear matter power spectrum and correlation function
-    with h5py.File(f"correlation_functions/corrfunc_{file}.hdf5", "r") as corrfunc_save:
+
+
+# plot correlation functions with bias fit overlaid
+def plot_bias_fits(file, catalogue):
+    with h5py.File(f"correlation_functions/{file}.hdf5", "r") as corrfunc_save:
          s = np.array([corrfunc_save[catalogue][z_bin]["s"] for z_bin in corrfunc_save[catalogue]])
          xi = np.array([corrfunc_save[catalogue][z_bin]["xi_0"] for z_bin in corrfunc_save[catalogue]])
          sigma_xi = np.array([corrfunc_save[catalogue][z_bin]["sigma"] for z_bin in corrfunc_save[catalogue]])
 
+    with h5py.File(f"bias_evolution/{file}.hdf5", "r") as bias_save:
+        z = np.array([bias_save[catalogue][z_bin]["z"] for z_bin in bias_save[catalogue]])
+        bias = np.array([bias_save[catalogue][z_bin]["b_1"] for z_bin in bias_save[catalogue]])
+        sigma_b = np.array([bias_save[catalogue][z_bin]["sigma"] for z_bin in bias_save[catalogue]])
+        residuals = np.array([bias_save[catalogue][z_bin]["residuals"] for z_bin in bias_save[catalogue]])
+
     fig, axes = plt.subplots(2, 5, figsize=(25, 10), layout="constrained", sharex=True)
     for i, ax in enumerate(axes.flat):
         j = -1-i
-        ax.plot(s[j,], xi[j,])
-        ax.plot(s[j,], bias[j]**2*cosmo.correlationFunction(s[j,], z[j]))
-        ax.fill_between(s[j,], xi[j,] + sigma_xi[j,], xi[j,] - sigma_xi[j,], alpha=0.3)
+        ax.plot(s[j], xi[j])
+        ax.plot(s[j], bias[j]**2*cosmo.correlationFunction(s[j], z[j]))
+        ax.fill_between(s[j], xi[j] + sigma_xi[j], xi[j] - sigma_xi[j], alpha=0.3)
         ax.annotate(f"$b_1={np.round(bias[j], decimals=2)}\\pm{np.round(sigma_b[j], decimals=2)}$", (0.05, 0.9), xycoords="axes fraction", fontsize=15)
         ax.annotate(f"$z={np.round(z[j], decimals=2)}$", (0.05, 0.8), xycoords="axes fraction", fontsize=15)
 
         inset = ax.inset_axes([0.55, 0.55, 0.4, 0.4])
         try:
-            inset.hist(residuals[j,], bins=20, range=(np.nanmin(residuals[j,]), np.nanmax(residuals[j,])))
+            inset.hist(residuals[j], bins=20, range=(np.nanmin(residuals[j]), np.nanmax(residuals[j])))
             inset.set_ylabel("Bin count")
             inset.set_xlabel("$(\\xi_g-b_1^2\\xi_m)/\\sigma$")
         except ValueError:
@@ -117,13 +126,17 @@ def bias_evolution(file, catalogue, resamples):
 
 if __name__ == "__main__":
     # constant number density sample 
-    bias_evolution("const_number_density", "/", 1000)
+    bias_evolution("const_number_density", "/")
+    plot_bias_fits("const_number_density", "/")
 
     # constant stellar mass sample
-    bias_evolution("const_stellar_mass", "11.5<m<inf", 1000)
-    bias_evolution("const_stellar_mass", "11<m<11.5", 1000)
-    bias_evolution("const_stellar_mass", "10.5<m<11", 1000)
+    bias_evolution("const_stellar_mass", "11.5<m<inf")
+    plot_bias_fits("const_stellar_mass", "11.5<m<inf")
+    bias_evolution("const_stellar_mass", "11<m<11.5")
+    plot_bias_fits("const_stellar_mass", "11<m<11.5")
+    bias_evolution("const_stellar_mass", "10.5<m<11")
+    plot_bias_fits("const_stellar_mass", "10.5<m<11")
 
     # magnitude limited sample
-    bias_evolution("magnitude_limited", "/", 1000)
-        
+    bias_evolution("magnitude_limited", "/")
+    plot_bias_fits("magnitude_limited", "/")
