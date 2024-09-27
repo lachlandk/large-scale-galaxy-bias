@@ -21,28 +21,24 @@ if __name__ == "__main__":
 
     start_time = datetime.now()
     lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01"
-    filename = "const_stellar_mass_A.hdf5"
     print("Creating constant stellar mass galaxy sample for the A realisation (no RSDs)...")
-    create_catalogue(lightcone_dir, files, filename)
+    create_catalogue(lightcone_dir, files, "const_stellar_mass_A")
     print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
 
     start_time = datetime.now()
     lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-B/SAM/galaxies_lightcone_01"
-    filename = "const_stellar_mass_B.hdf5"
     print("Creating constant stellar mass galaxy sample for the B realisation (no RSDs)...")
-    create_catalogue(lightcone_dir, files, filename)
+    create_catalogue(lightcone_dir, files, "const_stellar_mass_B")
     print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
 
     start_time = datetime.now()
     lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-A/SAM/galaxies_lightcone_01"
-    filename = "const_stellar_mass_A.hdf5"
     print("Creating constant stellar mass galaxy sample for the A realisation (with RSDs)...")
-    create_catalogue(lightcone_dir, files, filename, rsd=True)
+    create_catalogue(lightcone_dir, files, "const_stellar_mass_rsd_A", rsd=True)
     print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")
 
     start_time = datetime.now()
     lightcone_dir = "/freya/ptmp/mpa/vrs/TestRuns/MTNG/MTNG-L500-2160-B/SAM/galaxies_lightcone_01"
-    filename = "const_stellar_mass_B.hdf5"
     print("Creating constant stellar mass galaxy sample for the B realisation (with RSDs)...")
-    create_catalogue(lightcone_dir, files, filename, rsd=True)
+    create_catalogue(lightcone_dir, files, "const_stellar_mass_rsd_B", rsd=True)
     print(f"Galaxy catalogue created, elapsed time: {datetime.now() - start_time}")

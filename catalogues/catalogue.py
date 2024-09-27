@@ -55,7 +55,7 @@ def select_galaxies(dir, num_files, catalogue_save, bin_name, z_lims=(0, 1.5), m
                 data_filter = approx_dist_filter & mag_filter & mass_filter & dec_filter & ra_filter
 
                 # calculate redshift space position by correcting for peculiar velocity
-                obs_z = observed_redshift(z_at_comoving_distance[r[data_filter]], v_r[data_filter])
+                obs_z = observed_redshift(z_at_comoving_distance(r[data_filter]), v_r[data_filter])
 
                 # apply redshift bin filter
                 z_filter = (obs_z > z_lims[0]) & (obs_z < z_lims[1])
@@ -78,9 +78,9 @@ def select_galaxies(dir, num_files, catalogue_save, bin_name, z_lims=(0, 1.5), m
                 # create catalogue without RSDs
                 dist_filter = (r > comoving_distance(z_lims[0])) & (r < comoving_distance(z_lims[1]))
                 data_filter = dist_filter & mag_filter & mass_filter & dec_filter & ra_filter
-                
+
                 cosmo_z = z_at_comoving_distance(r[data_filter])
-            
+
                 # add data to catalogue
                 start_index = cat_pos.shape[0]
                 total_galaxies = start_index + np.count_nonzero(data_filter)
@@ -109,9 +109,9 @@ def select_galaxies(dir, num_files, catalogue_save, bin_name, z_lims=(0, 1.5), m
 
 
 def create_random_catalogue(multiplier, data_file, data_catalogue):
-    with h5py.File(f"catalogues/{data_file}", "r+") as file:
+    with h5py.File(f"catalogues/{data_file}.hdf5", "r+") as file:
         random_catalogue = file[data_catalogue].create_group("random")
-        
+
         data_z = np.array(file[data_catalogue]["z"])
         ra_lims = file[data_catalogue].attrs["ra_lims"]
         dec_lims = file[data_catalogue].attrs["dec_lims"]
@@ -120,7 +120,7 @@ def create_random_catalogue(multiplier, data_file, data_catalogue):
         ra = np.random.default_rng().uniform(ra_lims[0], ra_lims[1], size)
         dec = 90 - 180 / np.pi * np.arccos(np.random.default_rng().uniform(np.cos(np.pi/180 * (90 - dec_lims[1])), np.cos(np.pi/180 * (90 - dec_lims[0])), size))
         rand_z = np.random.default_rng().choice(data_z, size)
-        
+
         random_catalogue.create_dataset("Pos", (size, 3), data=np.transpose([ra, dec, comoving_distance(rand_z)]), dtype="f8")
         random_catalogue.create_dataset("z", (size,), data=rand_z, dtype="f8")
 
@@ -152,7 +152,7 @@ def plot_slice(file, catalogue):
     tick_formatter1 = angle_helper.FormatterDMS()
     grid_locator2 = MaxNLocator(3)
     grid_helper = GridHelperCurveLinear(transform, extremes=(90, 0, np.max(pos[:,2]), 0), grid_locator1=grid_locator1, grid_locator2=grid_locator2, tick_formatter1=tick_formatter1, tick_formatter2=None)
-    
+
     ax = fig.add_subplot(111, axes_class=FloatingAxes, grid_helper=grid_helper)
     ax.set_title("Light cone projected into to a plane")
     ax.set_facecolor("black")
@@ -237,7 +237,7 @@ if __name__ == "__main__":
     files = 155
 
     start_time = datetime.now()
-    print("Creating magnitude limited sample for mapping...")  
+    print("Creating magnitude limited sample for mapping...")
     total_galaxies, _, _ = select_galaxies(lightcone_dir, files, "magnitude_limited_0_lt_z_lt_0_5", "map", z_lims=(0, 0.5))
     print(f"Galaxies in catalogue: {total_galaxies}")
     plot_slice("magnitude_limited_0_lt_z_lt_0_5", "/")
